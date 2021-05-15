@@ -2,6 +2,16 @@ import spacy
 import pymongo
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
+import matplotlib.pyplot as plt
+import pandas as pd
+
+#remove stop_words and apply lemmatization
+def stopWord_lemma(phrase):
+    phrase = remove_stopwords(phrase)
+    temp = sp(phrase)
+    for word in temp:
+        phrase = phrase.replace(str(word), word.lemma_)
+    return phrase
 
 sp = spacy.load('en_core_web_sm')
 
@@ -13,10 +23,7 @@ for obj in IDs:
     for x in sample:
         x = "".join(x)
         x = x.replace(';', '').replace('**', '').replace(',', '').replace('(', '').replace(')', '').replace('.', ' ')
-        #remove stopwords
-        x = remove_stopwords(x)
-        #lemmatization
-        xz = sp(x)
-        for word in xz:
-            x = x.replace(str(word), word.lemma_)
-            db.update_one({"_id": obj},{"$set":{"Method": x }})
+        x = stopWord_lemma(x)
+        db.update_one({"_id": obj}, {"$set": {"Method": x}})
+
+##statistics

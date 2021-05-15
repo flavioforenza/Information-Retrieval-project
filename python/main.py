@@ -9,6 +9,7 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
+from dataset_manager import stopWord_lemma
 
 sp = spacy.load('en_core_web_sm')
 
@@ -23,10 +24,7 @@ for line in methods:
             I[a][b] += 1
 
 query = "cut each and good"
-query = remove_stopwords(query)
-queryX = sp(query)
-for word in queryX:
-    query = query.replace(str(word), word.lemma_)
+query = stopWord_lemma(query)
 
 bgrams = nltk.ngrams(['#S'] + word_tokenize(query) + ['#F'], 2)
 print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
