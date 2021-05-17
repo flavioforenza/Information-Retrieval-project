@@ -23,8 +23,13 @@ for line in methods:
         for (a, b) in nltk.ngrams(tokens, 2):
             I[a][b] += 1
 
-query = "cut each and good"
+query = "frying pan chocolate"
 query = stopWord_lemma(query)
+print("Query inserted:", query)
 
 bgrams = nltk.ngrams(['#S'] + word_tokenize(query) + ['#F'], 2)
-print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
+
+for a,b in bgrams:
+    print(I[a][b] / sum(I[a].values()), ", " , a, ', ',b )
+
+#print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
