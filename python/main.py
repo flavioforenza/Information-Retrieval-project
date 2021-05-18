@@ -10,10 +10,11 @@ from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
 from dataset_manager import stopWord_lemma
+from tqdm.notebook import tqdm
 
 sp = spacy.load('en_core_web_sm')
 
-db = pymongo.MongoClient()["admin"]["recipes"]
+db = pymongo.MongoClient()["Christmas"]["Recipe"]
 
 methods = [r['Method'] for r in db.find()]
 I = defaultdict(lambda: defaultdict(lambda:0))
@@ -23,13 +24,12 @@ for line in methods:
         for (a, b) in nltk.ngrams(tokens, 2):
             I[a][b] += 1
 
-query = "frying pan chocolate"
+query = "frying pan the chocolate."
 query = stopWord_lemma(query)
 print("Query inserted:", query)
 
 bgrams = nltk.ngrams(['#S'] + word_tokenize(query) + ['#F'], 2)
 
-for a,b in bgrams:
-    print(I[a][b] / sum(I[a].values()), ", " , a, ', ',b )
-
-#print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
+#for a,b in bgrams:
+#    print(I[a][b] / sum(I[a].values()), ", " , a, ', ',b )
+print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
