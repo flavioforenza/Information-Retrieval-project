@@ -11,10 +11,13 @@ from tqdm import tqdm
 from matplotlib.pyplot import hist
 import seaborn as sns
 
+db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
+columns = ['_id', 'Name', 'Description', 'Author', 'Ingredients', 'Method']
 correction = 0
 
 #remove stop_words and apply lemmatization
 def stopWord_lemma(phrase):
+    sp = spacy.load('en_core_web_sm')
     ts = [',', '.', ';', '(', ')', '?', '!', '&', '%', ':', '*', '"']
     for symbol in ts:
         phrase = phrase.replace(symbol, ' ' + symbol + ' ')
@@ -25,15 +28,10 @@ def stopWord_lemma(phrase):
         phrase = phrase.replace(str(word), word.lemma_)
     return phrase
 
-columns = ['_id', 'Name', 'Description', 'Author', 'Ingredients', 'Method']
-
-sp = spacy.load('en_core_web_sm')
-db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-
-#recipes_ingredients = defaultdict(dict)
-values = []
 
 if correction:
+    # recipes_ingredients = defaultdict(dict)
+    values = []
     IDs = [r['_id'] for r in db.find()]
     for obj in IDs:
         ingredients = [r['ingredients'] for r in db.find({"_id": ObjectId(obj)})]
