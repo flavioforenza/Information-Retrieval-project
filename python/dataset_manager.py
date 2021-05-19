@@ -12,8 +12,6 @@ from matplotlib.pyplot import hist
 import seaborn as sns
 
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-columns = ['_id', 'Name', 'Description', 'Author', 'Ingredients', 'Method']
-correction = 0
 
 #remove stop_words and apply lemmatization
 def stopWord_lemma(phrase):
@@ -28,59 +26,37 @@ def stopWord_lemma(phrase):
         phrase = phrase.replace(str(word), word.lemma_)
     return phrase
 
-
-if correction:
-    # recipes_ingredients = defaultdict(dict)
-    values = []
+def counter(column):
+    list = []
     IDs = [r['_id'] for r in db.find()]
     for obj in IDs:
-        ingredients = [r['ingredients'] for r in db.find({"_id": ObjectId(obj)})]
-        #list of dictionary
-        for x in ingredients:
-            # max_val = len(x)
-            # p = tqdm(total=max_val, disable=False)
-            #counting number of ingredients for every recipe
+        target = [r[column] for r in db.find({"_id": ObjectId(obj)})]
+        for x in target:
             count = 0
-            for a in x:
-                ingr = str(a.values())
-                count += ingr.count(",") + 1
-            values.append(count)
-            #recipes_ingredients[ObjectId(obj)] = count
-                # p.update(1)
-        # for x in sample:
-        #     x = "".join(x)
-        #     x = stopWord_lemma(x)
-        #     db.update_one({"_id": obj}, {"$set": {"Method": x}})
-    data = pd.DataFrame(list(db.find()))
-    data['totIngredients'] = values
-    data.to_pickle("./dummy.pkl")
-#print(data.isnull().sum())
-data = pd.read_pickle("./dummy.pkl")
-sorted = data.sort_values(by=['totIngredients'])
-#meanINgredients = sum(sorted['totIngredients'])/len(sorted['totIngredients'])
+            if column == "ingredients":
+                count += str(x).count(",") + 1
+            else:
+                count += len(x)
+        list.append(count)
+    return list
 
-# plt.figure(figsize=(16,3))
-# sns.displot(data['totIngredients'], kde=False, color="#336600")
-# plt.savefig('imgs/disp1.png')
-# plt.show()
-# plt.figure(figsize=(16,3))
-# sns.displot(data['totIngredients'], kde=True, color="#336600")
-# plt.show()
-# plt.savefig('imgs/disp2.png')
-plt.figure(figsize=(5,5))
-sns.boxplot(x=data['totIngredients'])
-plt.savefig('imgs/boxplot.png')
-#sns.swarmplot(y=data['totIngredients'], ax=ax[2])
-#plt.tight_layout()
+# FOR DEBUGGING
+# data = pd.DataFrame(list(db.find()))
+# data['totIngredients'] = counter('ingredients')
+# data['totInstructions'] = counter('instructions')
+# data.to_pickle("recipes.pkl")
 
+def plot_statistic(column):
+    data = pd.read_pickle("./recipes.pkl")
+    sns_dis = sns.displot(data = data[column], kde=True)
+    sns_dis.savefig('imgs/displot ' + column)
+    plt.close()
+    sns_boxplot = sns.boxplot(y=data[column], linewidth=1, orient='v')
+    plt.savefig('imgs/boxplot ' + column)
+    plt.close()
+    #DEBUG
+    #sns.boxplot(y=counter(column))
 
+plot_statistic('totIngredients')
 
-#hist(db.find().count(), weights=data.totIngredients)
-
-
-# #remove document with fields = null
-# data.to_csv (r'/Users/flavioforenza/Desktop/export_dataframe.csv', index = False, header=True)
-#
-# data.describe().T
-# #print("Description:", data.index)
 
