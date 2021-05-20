@@ -9,7 +9,7 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
-from dataset_manager import stopWord_lemma
+from data_manager import stopWord_lemma
 from tqdm.notebook import tqdm
 
 sp = spacy.load('en_core_web_sm')
