@@ -3,7 +3,6 @@ import nltk
 import pymongo
 import gensim
 import pandas
-from tqdm.notebook import tqdm
 from bson.objectid import ObjectId
 from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
@@ -24,7 +23,7 @@ for line in methods:
         for (a, b) in nltk.ngrams(tokens, 2):
             I[a][b] += 1
 
-query = "frying pan the chocolate."
+query = "Cream sugar and butter together till smooth"
 query = stopWord_lemma(query)
 print("Query inserted:", query)
 
