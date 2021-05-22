@@ -18,6 +18,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./recipes.pkl")
+IDs = [r['_id'] for r in db.find()]
+
 #remove stop_words and apply lemmatization
 def stopWord_lemma(phrase):
     sp = spacy.load('en_core_web_sm')
@@ -35,7 +37,6 @@ def stopWord_lemma(phrase):
 
 def counter(column):
     list = []
-    IDs = [r['_id'] for r in db.find()]
     with tqdm(total=len(IDs), file=sys.stdout) as pbar:
         for obj in IDs:
             pbar.update(1)
@@ -68,7 +69,7 @@ def plot_statistic(column):
 #plot_statistic('totIngredients')
 #plot_statistic('totInstructions')
 
-def tfidfVec(sentence)->np.ndarray:
+def tfidfVec(sentence: list[str])->np.ndarray:
     #provare un tokenizzatore diverso come spacy o gensim
     vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize)
     return vectorizer.fit_transform(sentence), vectorizer
@@ -80,23 +81,35 @@ def tfidfVec(sentence)->np.ndarray:
 
 def search(query, corpus):
     match = cosine_similarity(query, corpus)
-    print(match)
+    print(match[0])
     answers, scores = [], []
     for i, s in sorted(enumerate(match[0]), key=lambda x: -x[1]):
-        print(s)
         answers.append(i)
         scores.append(s)
     return answers, scores
 
 #TEST COSINE SIMILARITY BETWEEN ONE QUERY AND ONE DOCUMENT
-query = ["Yogurt Parfaits"]
-document = data['instructions'].values
-dd = document[0]
-ingr = dd[0]['text']
+query = ["Layer all ingredients in a serving dish."]
 
-doc, vectorizer = tfidfVec([ingr])
+
+#array che contiene delle liste di dizionari [text:instruction], 1 lista contiene n dizionari/instructions
+col_ingr = data[['_id','instructions']].values
+dic_id_instr = {}
+#with tqdm(total=len(IDs), file=sys.stdout) as pbar:
+#lista di istruzioni di 1 sola ricetta
+for id, instr in col_ingr[:2]:
+    list_instr = []
+    for dict in instr:
+        for k,v in dict.items():
+            list_instr.append(v)
+    dic_id_instr[id] = list_instr
+
+for k,v in dic_id_instr.items():
+    #ingr dev'essere una lista di array(instructions)
+    doc, vectorizer = tfidfVec(v)
+#print(doc, vectorizer)
 q = vectorizer.transform(query)
 
 a,s = search(q, doc)
-print(s)
-print(a)
+#print(s)
+#print(a)
