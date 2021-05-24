@@ -111,26 +111,27 @@ def tfidfVec(sentence: list[str])->np.ndarray:
 with open('id_instructions.pkl', 'rb') as f:
     id_instr = pickle.load(f)
 
-doc, vectorizer = tfidfVec(id_instr.values())
-#TEST COSINE SIMILARITY BETWEEN ONE QUERY AND ONE DOCUMENT
-query = "chocolate cake with caramel"
-query = stopWord_lemma(query)
-print(query)
-q = vectorizer.transform([query])
-
-
-#dict of relevant document
-doc_score = search(q, doc)
-relevant_doc = {}
-for k,v in doc_score.items():
-    if v > 0.35:
-        relevant_doc[data.loc[k]['_id']] = v
-
+#INSERIRE PARAM: QUERY
+def ranking(query):
+    doc, vectorizer = tfidfVec(id_instr.values())
+    #TEST COSINE SIMILARITY BETWEEN ONE QUERY AND ONE DOCUMENT
+    query = stopWord_lemma(query)
+    #print(query)
+    q = vectorizer.transform([query])
+    #dict of relevant document
+    doc_score = search(q, doc)
+    relevant_doc = {}
+    for k,v in doc_score.items():
+        if v > 0.35:
+            relevant_doc[data.loc[k]['_id']] = v
+    return relevant_doc, query
 
 #EVALUATION OF RANKING
 #use title and ingredients
 def ranking_evaluation(query, column):
     lst_query = []
+    relevant_doc, query = ranking(query)
+    print(query)
     query = nltk.word_tokenize(query)
     for k,v in relevant_doc.items():
         lst_tokens = []
@@ -155,13 +156,14 @@ def ranking_evaluation(query, column):
         lst_query.append(lst_result)
     return lst_query
 
-y_pred = []
-#OR
-occ_q_i = ranking_evaluation(query, 'ingredients')
-occ_q_t = ranking_evaluation(query, 'title')
 
-for i in range(len(occ_q_i)):
-    if occ_q_t[i].count(1)>0 or occ_q_t[i].count(1)>0:
+query = "chocolate cake with caramel and the salt."
+#OR
+#occ_q_i = ranking_evaluation(query, 'ingredients')
+occ_q_t = ranking_evaluation(query, 'title')
+y_pred = []
+for i in range(len(occ_q_t)):
+    if occ_q_t[i].count(1)>0:
         y_pred.append(1)
     else:
         y_pred.append(0)
