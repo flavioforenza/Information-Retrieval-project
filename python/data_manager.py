@@ -17,7 +17,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.manifold import TSNE
 from nltk.tokenize import word_tokenize
-
+from sklearn.metrics import precision_recall_curve
 
 
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
@@ -124,13 +124,13 @@ def ranking(query):
     for k,v in doc_score.items():
         if v > 0.35:
             relevant_doc[data.loc[k]['_id']] = v
-    return relevant_doc, query
+    return relevant_doc, query, relevant_doc
 
 #EVALUATION OF RANKING
 #use title and ingredients
 def ranking_evaluation(query, column):
     lst_query = []
-    relevant_doc, query = ranking(query)
+    relevant_doc, query, relevant_doc = ranking(query)
     print(query)
     query = nltk.word_tokenize(query)
     for k,v in relevant_doc.items():
@@ -154,13 +154,13 @@ def ranking_evaluation(query, column):
                 result = 1
             lst_result.append(result)
         lst_query.append(lst_result)
-    return lst_query
+    return lst_query, relevant_doc
 
 
-query = "chocolate cake with caramel and the salt."
+query = "lasagna with tomato and mozzarella"
 #OR
 #occ_q_i = ranking_evaluation(query, 'ingredients')
-occ_q_t = ranking_evaluation(query, 'title')
+occ_q_t, relevant_doc = ranking_evaluation(query, 'title')
 y_pred = []
 for i in range(len(occ_q_t)):
     if occ_q_t[i].count(1)>0:
@@ -168,7 +168,17 @@ for i in range(len(occ_q_t)):
     else:
         y_pred.append(0)
 
-print(y_pred)
+print(type(y_pred))
+print(type(relevant_doc.values()))
+precision, recall, thresholds = precision_recall_curve(y_pred, list(relevant_doc.values()))
+
+I = []
+for i, p in enumerate(precision):
+    I.append(max(precision[:i+1]))
+
+fig, ax = plt.subplots()
+ax.plot(recall, I)
+plt.show()
 
 
 
