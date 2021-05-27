@@ -24,6 +24,8 @@ from sklearn.metrics import precision_recall_curve
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./recipes.pkl")
 IDs = [r['_id'] for r in db.find()]
+sp = spacy.load('en_core_web_sm')
+
 
 '''
 PLOT STATISTICS OF DATASET
@@ -68,7 +70,6 @@ def plot_statistic(column):
 
 #drop stop_words, punctuation and apply lemmatization
 def clean_normalize(phrase):
-    sp = spacy.load('en_core_web_sm')
     ts = [',', '.', ';', '(', ')', '?', '!', '&', '%', ':', '*', '"', '-']
     for symbol in ts:
         phrase = phrase.replace(symbol, " ")
@@ -182,47 +183,37 @@ def get_corrispondence(query, column):
                 ids.append(k)
     return ids
 
-query = "lasagna with tomato and mozzarella"
-'''
-SEARCH QUERY IN INGREDIENTS TO GET DOCUMENT ID
-'''
-query = clean_normalize(query)
-list_ids_ingr = get_corrispondence(query, 'ingredients')
-list_ids_title = get_corrispondence(query, 'title')
-corrisp_Intersection = list(set(list_ids_title) & set(list_ids_ingr))
-corrisp_Union = list_ids_title+list_ids_ingr
-#print("common:", list(set(list_ids_title) & set(list_ids_ingr)))
+def alterQuery():
+    id_fQ = []
+    with tqdm(total=len(data['title']), file=sys.stdout) as pbar:
+        for title in data['title']:
+            pbar.update(1)
+            query = sp(title.lower())
+            list_noun = []
+            for token in query:
+                if token.pos_ == 'NOUN':
+                    list_noun.append(token.text)
+            if not list_noun:
+                list_noun.append(query)
+            if len(list_noun)>1:
+                id_fQ.append(' '.join(list_noun))
+            else:
+                id_fQ.append(list_noun[0])
+    # file = open("fakeQuery.pkl", "wb")
+    # pickle.dump(id_fQ, file)
+    # file.close()
+    # return id_fQ
 
-'''
-COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
-'''
-dict_score, indexDoc_score = ranking(query) #rimuovere quelli con peso 0 da indexDoc_score
-#rimuovere i documenti che non sono rilevanti (con peso = 0), successivamente vedere se questi hanno gli id corrispondenti
-answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
+#lst_query = alterQuery()
 
-y_pred, scores = [], []
-for e, score in answers:
-    if e in corrisp_Union:
-        y_pred.append(1)
-    else:
-        y_pred.append(0)
-    scores.append(score)
+with open('fakeQuery.pkl', 'rb') as f:
+        fq = pickle.load(f)
+# adding column to dataframe
+data['FQuery'] = fq
 
-precision, recall, thresholds = precision_recall_curve(y_pred, scores)
 
-fig, ax = plt.subplots()
-ax.plot(recall, precision)
-plt.show()
 
-I = []
-for i, p in enumerate(precision):
-    I.append(max(precision[:i+1]))
 
-print(thresholds)
-
-# fig, ax = plt.subplots()
-# ax.plot(recall, I)
-# plt.show()
 
 
 
