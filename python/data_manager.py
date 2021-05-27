@@ -9,7 +9,8 @@ import pandas as pd
 import seaborn as sns
 import numpy as np
 import pickle
-
+import scrape_schema_recipe as scr
+import random
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
 from collections import defaultdict
@@ -20,7 +21,7 @@ from sklearn.manifold import TSNE
 from nltk.tokenize import word_tokenize
 from sklearn.metrics import precision_recall_curve
 
-
+categories =  ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./recipes.pkl")
 IDs = [r['_id'] for r in db.find()]
@@ -112,7 +113,6 @@ def get_value(columns):
 #get_value(['id', 'title'])
 #get_value(['id', 'ingredients'])
 #get_value(['id', 'instructions'])
-
 
 #COMPUTE THE COSINE SIMILARITY
 def search(query, corpus):
@@ -206,16 +206,47 @@ def alterQuery():
 
 #lst_query = alterQuery()
 
-with open('fakeQuery.pkl', 'rb') as f:
-        fq = pickle.load(f)
+#now data contain fake queries
+with open('dataFrame.pkl', 'rb') as f:
+        data = pickle.load(f)
 # adding column to dataframe
-data['Query'] = fq
-file = open("dataFrame.pkl", "wb")
-pickle.dump(data, file)
-file.close()
+#data['Query'] = fq
+# file = open("dataFrame.pkl", "wb")
+# pickle.dump(data, file)
+# file.close()
 
-#take a query from those available
+def getItems(urls):
+    categories_find = {}
+    with tqdm(total=len(urls), file=sys.stdout) as pbar:
+        for i in range(len(urls)):
+            pbar.update(1)
+            try:
+                recipe_list = scr.scrape_url(urls[i], python_objects=True)
+                poss_categ = []
+                for x in categories:
+                    if x in str(recipe_list[0].values()).lower():
+                            poss_categ.append(x)
+                categories_find[i] = poss_categ
+            except:
+                pass
+    return categories_find
 
+#take a random query from those available
+category = []
+query = ""
+while not category:
+    rnd = random.randint(0,len(data))
+    query = data.iloc[rnd]['Query']
+    #extract items from web scraping
+    cat = getItems([data.iloc[rnd]['url']])
+    for x, v in cat.items():
+        if v:
+            category.append(v)
+
+print(category)
+print(query)
+
+#dict_score, indexDoc_score = ranking(query)
 
 
 
