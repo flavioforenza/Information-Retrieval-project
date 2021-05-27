@@ -8,12 +8,22 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
-from data_manager import data_processing
+from data_manager import *
 from tqdm.notebook import tqdm
 
 sp = spacy.load('en_core_web_sm')
 
-
+query = "lasagna with tomato and mozzarella"
+'''
+SEARCH QUERY IN INGREDIENTS TO GET DOCUMENT ID
+'''
+query = clean_normalize(query)
+#print(query)
+list_ids_ingr = get_corrispondence(query, 'ingredients')
+list_ids_title = get_corrispondence(query, 'title')
+print("ingr:",list_ids_ingr)
+print("title:",list_ids_title)
+print("common:", list(set(list_ids_title) & set(list_ids_ingr)))
 
 # db = pymongo.MongoClient()["Christmas"]["Recipe"]
 #
@@ -35,7 +45,4 @@ sp = spacy.load('en_core_web_sm')
 # #    print(I[a][b] / sum(I[a].values()), ", " , a, ', ',b )
 # print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
 
-if __name__ == '__main__':
-    num_cores = multiprocessing.cpu_count()
-    inputs = col_ingr.tolist()
-    Parallel(n_jobs=num_cores)(delayed(data_processing) for i in inputs)
+
