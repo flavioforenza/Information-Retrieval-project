@@ -209,7 +209,12 @@ def alterQuery():
 with open('fakeQuery.pkl', 'rb') as f:
         fq = pickle.load(f)
 # adding column to dataframe
-data['FQuery'] = fq
+data['Query'] = fq
+file = open("dataFrame.pkl", "wb")
+pickle.dump(data, file)
+file.close()
+
+#take a query from those available
 
 
 
