@@ -137,37 +137,7 @@ def ranking(query):
             relevant_doc[data.loc[k]['id']] = v
     return relevant_doc, doc_score
 
-#EVALUATION OF RANKING
-#use title and ingredients
-# def ranking_evaluation(query, column):
-#     lst_query = []
-#     relevant_doc, query = ranking(query)
-#     print(query)
-#     query = nltk.word_tokenize(query)
-#     for k,v in relevant_doc.items():
-#         lst_tokens = []
-#         text = data.loc[data['_id'] == ObjectId(k), [column]]
-#         values = text[column].values
-#         try:
-#             for lst in values:
-#                 for dict in lst:
-#                     for k, v in dict.items():
-#                         lst_tokens.append(v + '\n')
-#         except:
-#             lst_tokens = values
-#         lst_tokens = "".join(lst_tokens)
-#         lst_tokens = clean_normalize(lst_tokens)
-#         tokenize_list = nltk.word_tokenize(lst_tokens)
-#         lst_result = []
-#         for x in query:
-#             result = 0
-#             if any(x in s for s in tokenize_list):
-#                 result = 1
-#             lst_result.append(result)
-#         lst_query.append(lst_result)
-#     return lst_query, relevant_doc
 
-#search if a column contain the term of a query
 def get_corrispondence(query, column):
     try:
         with open('id_' + column +'.pkl', 'rb') as f:
@@ -215,11 +185,12 @@ with open('dataFrame.pkl', 'rb') as f:
 # pickle.dump(data, file)
 # file.close()
 
-def getItems(urls):
+def getEntity(urls, pbarLen, incr):
     categories_find = {}
-    with tqdm(total=len(urls), file=sys.stdout) as pbar:
+    with tqdm(total=pbarLen, file=sys.stdout) as pbar:
+        pbar.write("Search categories")
         for i in range(len(urls)):
-            pbar.update(1)
+            pbar.update(incr)
             try:
                 recipe_list = scr.scrape_url(urls[i], python_objects=True)
                 poss_categ = []
@@ -236,9 +207,10 @@ category = []
 query = ""
 while not category:
     rnd = random.randint(0,len(data))
-    query = data.iloc[rnd]['Query']
+    query = data.iloc[2]['Query']
+    query = clean_normalize(str(query))
     #extract items from web scraping
-    cat = getItems([data.iloc[rnd]['url']])
+    cat = getEntity([data.iloc[rnd]['url']], 1, 1)
     for x, v in cat.items():
         if v:
             category.append(v)
@@ -246,14 +218,64 @@ while not category:
 print(category)
 print(query)
 
-#dict_score, indexDoc_score = ranking(query)
+'''
+COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
+'''
+dict_score, indexDoc_score = ranking(query)
+answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
+#get categories for documents with weight > 0
 
+#lista con documenti e cagtegorie(non vuote)
+rel_doc_cat = {}
+thr = 0.3
+print("Documenti rilevanti: ", sum(i > thr for k, i in answers))
+increment_bar = 0
+for k,v in answers:
+    increment_bar +=1
+    if v>thr:
+        row = (data.loc[data['id'] == k[0]])
+        url = row['url'].values
+        catCook = getEntity([url[0]], sum(i > thr for k,i in answers), increment_bar)
+        for index, categ in catCook.items():
+            print(categ)
+            if categ:
+                print("True")
+                rel_doc_cat[index] = categ
+                #print(rel_doc_cat[index])
 
+print(len(rel_doc_cat.values()))
+#EVALUATION OF RANKING
+#use title and ingredients
+# def ranking_evaluation(query, column):
+#     lst_query = []
+#     relevant_doc, query = ranking(query)
+#     print(query)
+#     query = nltk.word_tokenize(query)
+#     for k,v in relevant_doc.items():
+#         lst_tokens = []
+#         text = data.loc[data['_id'] == ObjectId(k), [column]]
+#         values = text[column].values
+#         try:
+#             for lst in values:
+#                 for dict in lst:
+#                     for k, v in dict.items():
+#                         lst_tokens.append(v + '\n')
+#         except:
+#             lst_tokens = values
+#         lst_tokens = "".join(lst_tokens)
+#         lst_tokens = clean_normalize(lst_tokens)
+#         tokenize_list = nltk.word_tokenize(lst_tokens)
+#         lst_result = []
+#         for x in query:
+#             result = 0
+#             if any(x in s for s in tokenize_list):
+#                 result = 1
+#             lst_result.append(result)
+#         lst_query.append(lst_result)
+#     return lst_query, relevant_doc
 
-
-
-
+#search if a column contain the term of a query
 
 
 
