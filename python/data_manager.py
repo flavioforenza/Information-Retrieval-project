@@ -222,8 +222,7 @@ while not category:
         if v:
             category.append(v)
 
-res = []
-category = np.unique(category).tolist()
+queryCat = np.unique(category).tolist()
 print(category)
 print(query)
 
@@ -233,7 +232,6 @@ COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
 dict_score, indexDoc_score = ranking(query)
 answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
-
 '''
 SEARCH DOCUMENT CATEGORY
 '''
@@ -241,89 +239,94 @@ def search_DocCategories(thr):
     #lista con documenti e cagtegorie(non vuote)
     print("Documenti rilevanti: ", sum(i > thr for k, i in answers))
     increment_bar = 0
-    list_all_categories = []
-    list_scores = []
-    for k,v in answers:
-        list_cc=[]
+    cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
+    cat_some_empty = pd.DataFrame(columns=["Doc_id", "Categories", "Score"])
+    for doc_id, score in answers:
         increment_bar +=1
-        if v>thr:
-            row = (data.loc[data['id'] == k[0]])
+        if score>thr:
+            row = (data.loc[data['id'] == doc_id[0]])
             url = row['url'].values
             catCook = getEntity([url[0]], sum(i > thr for k,i in answers), increment_bar)
             for index, categ in catCook.items():
                 print(categ)
                 if categ:
-                    list_cc.append(categ)
-            list_all_categories.append(list_cc)
-            list_scores.append(v)
-    return list_all_categories, list_scores
+                    cat_not_empty = cat_not_empty.append({"Doc_id":doc_id,
+                                                        "Categories":categ,
+                                                        "Score":score},
+                                                       ignore_index=True)
+                cat_some_empty = cat_some_empty.append({"Doc_id":doc_id,
+                                                    "Categories":categ,
+                                                    "Score":score},
+                                                   ignore_index=True)
 
-list_all_categories,  list_scores = search_DocCategories(0.29)
+    return cat_not_empty, cat_some_empty
 
+threshold = 0.29
+docCat , docCat_some_empty= search_DocCategories(threshold)
+
+docCat_some_empty.to_pickle("./some_empty.pkl")
+docCat.to_pickle("./no_empty.pkl")
+
+docCat_some_empty = pd.read_pickle("./some_empty.pkl")
+docCat = pd.read_pickle("./no_empty.pkl")
 '''
 SEARCH CATEGORY CORRESPONDENCE - 1 METHOD
 '''
-y_pred = []
-for x in category:
-    for y in list_all_categories:
+def getCatCorrispondece(qC, dC, estimate):
+    y_pred = []
+    for x in qC:
         #valuto come errate quelle senza categoria
-        if not y:
-            y_pred.append(1)
-        for single in y:
-            if x in np.unique(y).tolist():
+        for docC in dC:
+            if not docC:
+                y_pred.append(estimate)
+                continue
+            if x in np.unique(docC).tolist():
                 y_pred.append(1)
             else:
                 y_pred.append(0)
+    return y_pred
 
-#print("Documenti estratti: ", doc_Buoni)
-#print("Documenti scartati: ", sum(i > thr for k, i in answers) - doc_Buoni)
+def plot(precision, recall, title):
+    fig, (ax1, ax2) = plt.subplots(1, 2)
+    fig.suptitle(title)
+    ax1.plot(recall, precision)
+    I = []
+    for i, p in enumerate(precision):
+        I.append(max(precision[:i+1]))
+    ax2.plot(recall, I)
+    plt.show()
+    plt.draw()
 
-precision, recall, thresholds = precision_recall_curve(y_pred, list_scores)
-print("Thr:", thresholds)
-fig, ax = plt.subplots()
-ax.plot(recall, precision)
-plt.show()
-plt.close()
+print(docCat_some_empty['Categories'].values)
+print(docCat['Categories'].values)
 
-I = []
-for i, p in enumerate(precision):
-    I.append(max(precision[:i+1]))
+'''
+3 METHODS TO EVALUATE RANKING
+'''
+#1. DOCUMENTS WITHOUT ENTITIES = 1
+estimate = 1
+lol = docCat_some_empty['Categories'].values
+y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+print(y_pred)
+d_score = docCat_some_empty['Score'].values
+precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 1')
 
-fig, ax = plt.subplots()
-ax.plot(recall, I)
-plt.show()
+#2. DOCUMENTS WITHOUT ENTITIES = 0
+estimate = 0
+y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+print(y_pred)
+d_score = docCat_some_empty['Score'].values
+precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 0')
 
-#EVALUATION OF RANKING
-#use title and ingredients
-# def ranking_evaluation(query, column):
-#     lst_query = []
-#     relevant_doc, query = ranking(query)
-#     print(query)
-#     query = nltk.word_tokenize(query)
-#     for k,v in relevant_doc.items():
-#         lst_tokens = []
-#         text = data.loc[data['_id'] == ObjectId(k), [column]]
-#         values = text[column].values
-#         try:
-#             for lst in values:
-#                 for dict in lst:
-#                     for k, v in dict.items():
-#                         lst_tokens.append(v + '\n')
-#         except:
-#             lst_tokens = values
-#         lst_tokens = "".join(lst_tokens)
-#         lst_tokens = clean_normalize(lst_tokens)
-#         tokenize_list = nltk.word_tokenize(lst_tokens)
-#         lst_result = []
-#         for x in query:
-#             result = 0
-#             if any(x in s for s in tokenize_list):
-#                 result = 1
-#             lst_result.append(result)
-#         lst_query.append(lst_result)
-#     return lst_query, relevant_doc
+#3. DISCARD DOCUMENTS WITHOUT ENTITIES
+y_pred = getCatCorrispondece(queryCat, list(docCat['Categories'].values), estimate)
+print(y_pred)
+d_score = docCat['Score'].values
+precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+plot(precision, recall, 'DISCARD DOCUMENTS WITHOUT ENTITIES')
 
-#search if a column contain the term of a query
 
 
 
