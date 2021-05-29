@@ -95,3 +95,38 @@ for i, p in enumerate(precision):
 # plt.show()
 
 
+
+
+
+
+# urll = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY&query=Yogurt%20Greek%20Plain%20nonfat"
+# res = requests.get(urll)
+# js = res.json()
+# print(js)
+# with open('personal.json', 'w') as json_file:
+#     json.dump(js, json_file)
+f = open('personal.json',)
+data = json.load(f)
+cat_USDA = data['foods'][0]['foodCategory']
+
+
+'''
+GET ENTITIES FROM USDA
+'''
+# catUSDA = js['foodCategory']
+# for x in catUSDA
+# print(catUSDA)
+#print(res.text)
+
+def call_API_2(foodName, apiKey):
+    data = {"query" : str(foodName)}
+    url = f'https://api.nal.usda.gov/fdc/v1/foods/search?api_key={apiKey}'
+    r = requests.post(url, json=data)
+    print(r.status_code)  # 200
+    return r.json
+
+ingr_USDA = "Yogurt Parfaits"
+ans = call_API_2(ingr_USDA, key_USDA)
+print(ans)
+
+

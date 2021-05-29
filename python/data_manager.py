@@ -13,15 +13,21 @@ import scrape_schema_recipe as scr
 import random
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.manifold import TSNE
 from nltk.tokenize import word_tokenize
 from sklearn.metrics import precision_recall_curve
+from usda.client import UsdaClient
+import requests
+import json
 
-categories =  ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
+
+key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
+
+categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./recipes.pkl")
 IDs = [r['_id'] for r in db.find()]
@@ -207,7 +213,8 @@ category = []
 query = ""
 while not category:
     rnd = random.randint(0,len(data))
-    query = data.iloc[2]['Query']
+    rnd = 11
+    query = data.iloc[rnd]['Query']
     query = clean_normalize(str(query))
     #extract items from web scraping
     cat = getEntity([data.iloc[rnd]['url']], 1, 1)
@@ -215,6 +222,8 @@ while not category:
         if v:
             category.append(v)
 
+res = []
+category = np.unique(category).tolist()
 print(category)
 print(query)
 
@@ -224,27 +233,66 @@ COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
 dict_score, indexDoc_score = ranking(query)
 answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
-#get categories for documents with weight > 0
 
-#lista con documenti e cagtegorie(non vuote)
-rel_doc_cat = {}
-thr = 0.3
-print("Documenti rilevanti: ", sum(i > thr for k, i in answers))
-increment_bar = 0
-for k,v in answers:
-    increment_bar +=1
-    if v>thr:
-        row = (data.loc[data['id'] == k[0]])
-        url = row['url'].values
-        catCook = getEntity([url[0]], sum(i > thr for k,i in answers), increment_bar)
-        for index, categ in catCook.items():
-            print(categ)
-            if categ:
-                print("True")
-                rel_doc_cat[index] = categ
-                #print(rel_doc_cat[index])
+'''
+SEARCH DOCUMENT CATEGORY
+'''
+def search_DocCategories(thr):
+    #lista con documenti e cagtegorie(non vuote)
+    print("Documenti rilevanti: ", sum(i > thr for k, i in answers))
+    increment_bar = 0
+    list_all_categories = []
+    list_scores = []
+    for k,v in answers:
+        list_cc=[]
+        increment_bar +=1
+        if v>thr:
+            row = (data.loc[data['id'] == k[0]])
+            url = row['url'].values
+            catCook = getEntity([url[0]], sum(i > thr for k,i in answers), increment_bar)
+            for index, categ in catCook.items():
+                print(categ)
+                if categ:
+                    list_cc.append(categ)
+            list_all_categories.append(list_cc)
+            list_scores.append(v)
+    return list_all_categories, list_scores
 
-print(len(rel_doc_cat.values()))
+list_all_categories,  list_scores = search_DocCategories(0.29)
+
+'''
+SEARCH CATEGORY CORRESPONDENCE - 1 METHOD
+'''
+y_pred = []
+for x in category:
+    for y in list_all_categories:
+        #valuto come errate quelle senza categoria
+        if not y:
+            y_pred.append(1)
+        for single in y:
+            if x in np.unique(y).tolist():
+                y_pred.append(1)
+            else:
+                y_pred.append(0)
+
+#print("Documenti estratti: ", doc_Buoni)
+#print("Documenti scartati: ", sum(i > thr for k, i in answers) - doc_Buoni)
+
+precision, recall, thresholds = precision_recall_curve(y_pred, list_scores)
+print("Thr:", thresholds)
+fig, ax = plt.subplots()
+ax.plot(recall, precision)
+plt.show()
+plt.close()
+
+I = []
+for i, p in enumerate(precision):
+    I.append(max(precision[:i+1]))
+
+fig, ax = plt.subplots()
+ax.plot(recall, I)
+plt.show()
+
 #EVALUATION OF RANKING
 #use title and ingredients
 # def ranking_evaluation(query, column):
