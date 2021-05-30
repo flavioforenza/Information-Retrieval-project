@@ -27,6 +27,7 @@ import json
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 
+
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./recipes.pkl")
@@ -339,11 +340,11 @@ for doc_id in empty_list['Doc_id'].values:
             text = list(ingredient.values())
             string_conc = text[0].replace(",","%20")
             string_conc = string_conc.replace(" ","")
-            #text = text.replace(",", "%20")
-            #text = "".join(text)
-            print(string_conc)
-
-
+            print(key_USDA.key)
+            urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key +"&query=" + string_conc
+            res = requests.get(urlUSDA)
+            js = res.json()
+            cat_USDA = js['foods'][0]['foodCategory']
 
 #predere il documento della query e successivamente prendere i suoi ingredienti.
 
