@@ -261,11 +261,11 @@ def search_DocCategories(thr):
 
     return cat_not_empty, cat_some_empty
 
-threshold = 0.29
-docCat , docCat_some_empty= search_DocCategories(threshold)
+#threshold = 0.29
+#docCat , docCat_some_empty= search_DocCategories(threshold)
 
-docCat_some_empty.to_pickle("./some_empty.pkl")
-docCat.to_pickle("./no_empty.pkl")
+#docCat_some_empty.to_pickle("./some_empty.pkl")
+#docCat.to_pickle("./no_empty.pkl")
 
 docCat_some_empty = pd.read_pickle("./some_empty.pkl")
 docCat = pd.read_pickle("./no_empty.pkl")
@@ -297,35 +297,57 @@ def plot(precision, recall, title):
     plt.show()
     plt.draw()
 
-print(docCat_some_empty['Categories'].values)
-print(docCat['Categories'].values)
-
 '''
 3 METHODS TO EVALUATE RANKING
 '''
 #1. DOCUMENTS WITHOUT ENTITIES = 1
-estimate = 1
-lol = docCat_some_empty['Categories'].values
-y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
-print(y_pred)
-d_score = docCat_some_empty['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
-plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 1')
+# estimate = 1
+# lol = docCat_some_empty['Categories'].values
+# y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+# print(y_pred)
+# d_score = docCat_some_empty['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 1')
+#
+# #2. DOCUMENTS WITHOUT ENTITIES = 0
+# estimate = 0
+# y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+# print(y_pred)
+# d_score = docCat_some_empty['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 0')
+#
+# #3. DISCARD DOCUMENTS WITHOUT ENTITIES
+# y_pred = getCatCorrispondece(queryCat, list(docCat['Categories'].values), estimate)
+# print(y_pred)
+# d_score = docCat['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DISCARD DOCUMENTS WITHOUT ENTITIES')
 
-#2. DOCUMENTS WITHOUT ENTITIES = 0
-estimate = 0
-y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
-print(y_pred)
-d_score = docCat_some_empty['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
-plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 0')
+'''
+USE USDA DATABASE TO GET ENTITIES
+'''
+#docCat_some_empty --> qui ci sono i documenti con e senza categoria
 
-#3. DISCARD DOCUMENTS WITHOUT ENTITIES
-y_pred = getCatCorrispondece(queryCat, list(docCat['Categories'].values), estimate)
-print(y_pred)
-d_score = docCat['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
-plot(precision, recall, 'DISCARD DOCUMENTS WITHOUT ENTITIES')
+#prendere i documenti senza categoria:
+empty_list = docCat_some_empty[docCat_some_empty['Categories'].str.len()==0]
+for doc_id in empty_list['Doc_id'].values:
+    documents = data[data['id'] == doc_id[0]]
+    for index, row in documents.iterrows():
+        ingredients = row['ingredients']
+        for ingredient in ingredients:
+            text = list(ingredient.values())
+            string_conc = text[0].replace(",","%20")
+            string_conc = string_conc.replace(" ","")
+            #text = text.replace(",", "%20")
+            #text = "".join(text)
+            print(string_conc)
+
+
+
+#predere il documento della query e successivamente prendere i suoi ingredienti.
+
+
 
 
 
