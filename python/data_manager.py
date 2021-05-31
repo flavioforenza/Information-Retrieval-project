@@ -224,6 +224,9 @@ while not category:
             category.append(v)
 
 queryCat = np.unique(category).tolist()
+# open_file = open("queryCat.pkl", "wb")
+# pickle.dump(queryCat, open_file)
+# open_file.close()
 print(category)
 print(query)
 
@@ -231,23 +234,24 @@ print(query)
 COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
 '''
 dict_score, indexDoc_score = ranking(query)
-answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
+#useful for obtaining the filtered ranking
+doc_score = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
 '''
 SEARCH DOCUMENT CATEGORY
 '''
 def search_DocCategories(thr):
     #lista con documenti e cagtegorie(non vuote)
-    print("Documenti rilevanti: ", sum(i > thr for k, i in answers))
+    print("Documenti rilevanti: ", sum(i > thr for k, i in doc_score))
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
     cat_some_empty = pd.DataFrame(columns=["Doc_id", "Categories", "Score"])
-    for doc_id, score in answers:
+    for doc_id, score in doc_score:
         increment_bar +=1
         if score>thr:
             row = (data.loc[data['id'] == doc_id[0]])
             url = row['url'].values
-            catCook = getEntity([url[0]], sum(i > thr for k,i in answers), increment_bar)
+            catCook = getEntity([url[0]], sum(i > thr for k,i in doc_score), increment_bar)
             for index, categ in catCook.items():
                 print(categ)
                 if categ:
@@ -271,20 +275,22 @@ def search_DocCategories(thr):
 docCat_some_empty = pd.read_pickle("./some_empty.pkl")
 docCat = pd.read_pickle("./no_empty.pkl")
 '''
-SEARCH CATEGORY CORRESPONDENCE - 1 METHOD
+SEARCH CATEGORY CORRESPONDENCE - 1st METHOD
+--- USE ENTITIES FROM SCRAPE_SCHEMA_RECIPE API ---
 '''
+
 def getCatCorrispondece(qC, dC, estimate):
     y_pred = []
-    for x in qC:
-        #valuto come errate quelle senza categoria
-        for docC in dC:
-            if not docC:
-                y_pred.append(estimate)
-                continue
-            if x in np.unique(docC).tolist():
-                y_pred.append(1)
-            else:
-                y_pred.append(0)
+    for docC in dC:
+        if not docC:
+            y_pred.append(estimate)
+            continue
+        lst3 = [value for value in np.unique(qC).tolist() if value in np.unique(docC).tolist()]
+        #se vi è almeno una corrispondenza
+        if len(lst3) > 0:
+            y_pred.append(1)
+        else:
+            y_pred.append(0)
     return y_pred
 
 def plot(precision, recall, title):
@@ -310,10 +316,10 @@ def plot(precision, recall, title):
 # precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
 # plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 1')
 #
-# #2. DOCUMENTS WITHOUT ENTITIES = 0
+#2. DOCUMENTS WITHOUT ENTITIES = 0
 # estimate = 0
 # y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
-# print(y_pred)
+# print("Len pred:", len(y_pred))
 # d_score = docCat_some_empty['Score'].values
 # precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
 # plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 0')
@@ -326,27 +332,76 @@ def plot(precision, recall, title):
 # plot(precision, recall, 'DISCARD DOCUMENTS WITHOUT ENTITIES')
 
 '''
-USE USDA DATABASE TO GET ENTITIES
+SEARCH CATEGORY CORRESPONDENCE - 2nd METHOD
+--- USE MIXED ENTITIES (SCRAPE_SCHEMA_RECIPE+USDA DATABASE) ---
 '''
-#docCat_some_empty --> qui ci sono i documenti con e senza categoria
+def get_entities_USDA(ingredients):
+    lst_entities = []
+    for ingredient in ingredients:
+        text = list(ingredient.values())
+        string_conc = text[0].replace(",", "%20")
+        string_conc = string_conc.replace(" ", "")
+        urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key + "&query=" + string_conc
+        res = requests.get(urlUSDA)
+        js = res.json()
+        cat_USDA = js['foods'][0]['foodCategory']
+        lst_entities.append(cat_USDA)
+    return lst_entities
 
-#prendere i documenti senza categoria:
-empty_list = docCat_some_empty[docCat_some_empty['Categories'].str.len()==0]
-for doc_id in empty_list['Doc_id'].values:
-    documents = data[data['id'] == doc_id[0]]
-    for index, row in documents.iterrows():
-        ingredients = row['ingredients']
-        for ingredient in ingredients:
-            text = list(ingredient.values())
-            string_conc = text[0].replace(",","%20")
-            string_conc = string_conc.replace(" ","")
-            print(key_USDA.key)
-            urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key +"&query=" + string_conc
-            res = requests.get(urlUSDA)
-            js = res.json()
-            cat_USDA = js['foods'][0]['foodCategory']
+def getEntitiesDoc_USDA():
+    idx_empty = []
+    empty_list = docCat_some_empty[docCat_some_empty['Categories'].str.len() == 0]
+    for doc_id in empty_list['Doc_id'].values:
+        documents = data[data['id'] == doc_id[0]]
+        for index, row in documents.iterrows():
+            idx_empty.append(index)
+            ingredients = row['ingredients']
+            lst_categories = get_entities_USDA(ingredients)
+            #add entities USDA with scraped entities
+            idx = docCat_some_empty[docCat_some_empty['Doc_id'] == doc_id[0]].index.values
+            docCat_some_empty.at[idx[0], 'Categories'] = lst_categories
+    return docCat_some_empty
 
-#predere il documento della query e successivamente prendere i suoi ingredienti.
+#nuovo dataframe contenete le categorie di USDA e del web scraping
+#docCat_some_empty.to_pickle("./some_empty_USDA.pkl")
+
+# get query category from USDA
+def getEntitiesQuery_USDA():
+    q = data.iloc[11]['Query']
+    #get ingredients from this index
+    qidx = data[data["Query"]==q].index.values
+    row = data.loc[qidx]
+    #prendo gli ingredienti a tale indice
+    ingredients = [i for i in row['ingredients']]
+    lst_ingr_q_USDA = get_entities_USDA(ingredients[0])
+    return lst_ingr_q_USDA
+
+#save lst_ingr_q_USDA
+# open_file = open("lst_ingr_q_USDA.pkl", "wb")
+# pickle.dump(lst_ingr_q_USDA, open_file)
+# open_file.close()
+
+#docCat_some_empty = getEntitiesDoc_USDA()
+#lst_ingr_q_USDA = getEntitiesQuery_USDA()
+
+
+def evaluate_mixed_entities():
+    lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
+    #queryCat = pd.read_pickle("./queryCat.pkl")
+    docCat_some_empty = pd.read_pickle("./some_empty_USDA.pkl")
+
+    all_cat_query = queryCat+lst_ingr_q_USDA
+    estimate = 0
+    y_pred = getCatCorrispondece(all_cat_query, list(docCat_some_empty['Categories'].values), estimate)
+    d_score = docCat_some_empty['Score'].values
+    precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+    plot(precision, recall, 'METRICS WITH MIXED ENTITIES (SCRAPE+USDA)')
+
+'''
+SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
+--- USE ONLY ENTITIES FROM USDA DATABASE ---
+'''
+
 
 
 
