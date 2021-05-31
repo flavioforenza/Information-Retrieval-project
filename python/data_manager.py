@@ -388,7 +388,7 @@ def getEntitiesQuery_USDA():
 # open_file.close()
 
 #docCat_some_empty = getEntitiesDoc_USDA()
-lst_ingr_q_USDA = getEntitiesQuery_USDA()
+#lst_ingr_q_USDA = getEntitiesQuery_USDA()
 
 
 def evaluate_mixed_entities():
@@ -409,28 +409,31 @@ SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 '''
 #devo prendere i documenti renkati e ricavare la categoria da ogni ingrediente
 execute = 0
+
 if execute:
     doc_USDAEntity = {}
     with tqdm(total=sum(i > threshold for k,i in doc_score), file=sys.stdout) as pbar:
         pbar.write("Search categories in USDA DB")
         for doc_id, score in doc_score:
-            if score>threshold:
-                print("Entity search: document #", doc_id[0])
-                if score > threshold:
-                    row = (data.loc[data['id'] == doc_id[0]])
-                    ingredients = row['ingredients'].values
-                    entities = get_entities_USDA(ingredients[0])
-                    doc_USDAEntity[doc_id[0]] = entities
-                    pbar.update(1)
+            print("Entity search: document #", doc_id[0])
+            if score > threshold:
+                row = (data.loc[data['id'] == doc_id[0]])
+                ingredients = row['ingredients'].values
+                entities = get_entities_USDA(ingredients[0])
+                doc_USDAEntity[doc_id[0]] = entities
+                pbar.update(1)
     # a_file = open("doc_USDAEntity.pkl", "wb")
     # pickle.dump(doc_USDAEntity, a_file)
     # a_file.close()
 
 a_file = open("doc_USDAEntity.pkl", "rb")
 doc_USDAEntity = pickle.load(a_file)
+lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
 
-lst_ingr_q_USDA = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
-print(lst_ingr_q_USDA)
+y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
+d_score = [i for k,i in doc_score if i>threshold]
+precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+plot(precision, recall, 'ONLY WITH USDA ENTITIES')
 
 
 
