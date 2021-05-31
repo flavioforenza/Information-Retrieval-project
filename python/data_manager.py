@@ -238,11 +238,11 @@ dict_score, indexDoc_score = ranking(query)
 doc_score = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
 '''
-SEARCH DOCUMENT CATEGORY
+SEARCH DOCUMENT CATEGORY WITH "scrape_schema_recipe" API
 '''
 def search_DocCategories(thr):
     #lista con documenti e cagtegorie(non vuote)
-    print("Documenti rilevanti: ", sum(i > thr for k, i in doc_score))
+    #print("Documenti rilevanti: ", sum(i > thr for k, i in doc_score))
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
     cat_some_empty = pd.DataFrame(columns=["Doc_id", "Categories", "Score"])
@@ -266,7 +266,7 @@ def search_DocCategories(thr):
 
     return cat_not_empty, cat_some_empty
 
-#threshold = 0.29
+threshold = 0.29
 #docCat , docCat_some_empty= search_DocCategories(threshold)
 
 #docCat_some_empty.to_pickle("./some_empty.pkl")
@@ -285,9 +285,12 @@ def getCatCorrispondece(qC, dC, estimate):
         if not docC:
             y_pred.append(estimate)
             continue
-        lst3 = [value for value in np.unique(qC).tolist() if value in np.unique(docC).tolist()]
+        try:
+            corrispondence = [value for value in np.unique(qC).tolist() if value in np.unique(docC).tolist()]
+        except:
+            corrispondence.append([])
         #se vi è almeno una corrispondenza
-        if len(lst3) > 0:
+        if len(corrispondence) > 0:
             y_pred.append(1)
         else:
             y_pred.append(0)
@@ -342,9 +345,12 @@ def get_entities_USDA(ingredients):
         string_conc = text[0].replace(",", "%20")
         string_conc = string_conc.replace(" ", "")
         urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key + "&query=" + string_conc
-        res = requests.get(urlUSDA)
-        js = res.json()
-        cat_USDA = js['foods'][0]['foodCategory']
+        try:
+            res = requests.get(urlUSDA)
+            js = res.json()
+            cat_USDA = js['foods'][0]['foodCategory']
+        except:
+            continue
         lst_entities.append(cat_USDA)
     return lst_entities
 
@@ -382,7 +388,7 @@ def getEntitiesQuery_USDA():
 # open_file.close()
 
 #docCat_some_empty = getEntitiesDoc_USDA()
-#lst_ingr_q_USDA = getEntitiesQuery_USDA()
+lst_ingr_q_USDA = getEntitiesQuery_USDA()
 
 
 def evaluate_mixed_entities():
@@ -401,10 +407,30 @@ def evaluate_mixed_entities():
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
 '''
+#devo prendere i documenti renkati e ricavare la categoria da ogni ingrediente
+execute = 0
+if execute:
+    doc_USDAEntity = {}
+    with tqdm(total=sum(i > threshold for k,i in doc_score), file=sys.stdout) as pbar:
+        pbar.write("Search categories in USDA DB")
+        for doc_id, score in doc_score:
+            if score>threshold:
+                print("Entity search: document #", doc_id[0])
+                if score > threshold:
+                    row = (data.loc[data['id'] == doc_id[0]])
+                    ingredients = row['ingredients'].values
+                    entities = get_entities_USDA(ingredients[0])
+                    doc_USDAEntity[doc_id[0]] = entities
+                    pbar.update(1)
+    # a_file = open("doc_USDAEntity.pkl", "wb")
+    # pickle.dump(doc_USDAEntity, a_file)
+    # a_file.close()
 
+a_file = open("doc_USDAEntity.pkl", "rb")
+doc_USDAEntity = pickle.load(a_file)
 
-
-
+lst_ingr_q_USDA = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
+print(lst_ingr_q_USDA)
 
 
 
