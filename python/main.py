@@ -8,29 +8,103 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
-#from data_manager import *
+from data_manager import *
 from tqdm.notebook import tqdm
 from usda.client import UsdaClient
 import requests
 
 
-
 sp = spacy.load('en_core_web_sm')
-key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./dataFrame.pkl")
 
+'''
+PLOT STATISTICS DATASET
+'''
+plot_statistic('totIngredients')
+plot_statistic('totInstructions')
 
-# query = "lasagna with tomato and mozzarella"
-# '''
-# SEARCH QUERY IN INGREDIENTS TO GET DOCUMENT ID
-# '''
-# query = clean_normalize(query)
-# #print(query)
-# list_ids_ingr = get_corrispondence(query, 'ingredients')
-# list_ids_title = get_corrispondence(query, 'title')
-# print("ingr:",list_ids_ingr)
-# print("title:",list_ids_title)
-# print("common:", list(set(list_ids_title) & set(list_ids_ingr)))
+'''
+GET A RANDOM QUERY
+'''
+categories, query = rnd_query(random.randint(0,len(data)))
+queryCat = np.unique(categories).tolist()
+print("Query: ", query)
+print("Categories: ", categories)
+
+'''
+COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY 
+TO GET RANKING OF RELEVANT DOCUMENTS
+'''
+indexDoc_score = ranking(query)
+#LIST OF DOCUMENTS-SCORES
+doc_score = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
+
+'''
+ENTITIES 
+'''
+threshold = 0.29
+#docCat , docCat_some_empty= search_DocCategories(threshold)
+docCat = pd.read_pickle("./no_empty.pkl")
+docCat_some_empty = pd.read_pickle("./some_empty.pkl")
+
+'''
+3 WAYS TO CONSIDER PREDICTIONS (OBTAINED ONLY WITH THE SCRAPE_SCHEMA_RECIPE API)
+'''
+#1. DOCUMENTS WITHOUT ENTITIES = 1
+# estimate = 1
+# y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+# d_score = docCat_some_empty['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 1')
+
+#2. DOCUMENTS WITHOUT ENTITIES = 0
+# estimate = 0
+# y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
+# d_score = docCat_some_empty['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DOCUMENTS WITHOUT ENTITIES = 0')
+
+# #3. DISCARD DOCUMENTS WITHOUT ENTITIES
+# y_pred = getCatCorrispondece(queryCat, list(docCat['Categories'].values), estimate)
+# print(y_pred)
+# d_score = docCat['Score'].values
+# precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+# plot(precision, recall, 'DISCARD DOCUMENTS WITHOUT ENTITIES')
+
+'''
+SEARCH CATEGORY CORRESPONDENCE - 2nd METHOD
+--- USE MIXED ENTITIES (SCRAPE_SCHEMA_RECIPE+USDA DATABASE) ---
+'''
+#entity search for documents that don't have it
+docCat_some_empty = getEntitiesDoc_USDA()
+lst_ingr_q_USDA = getEntitiesQuery_USDA()
+#plot metrics results
+evaluate_mixed_entities(docCat_some_empty,lst_ingr_q_USDA, queryCat)
+
+'''
+SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
+--- USE ONLY ENTITIES FROM USDA DATABASE ---
+'''
+#sistemare parametri
+only_USDA()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # db = pymongo.MongoClient()["Christmas"]["Recipe"]
 #
@@ -52,131 +126,4 @@ data = pd.read_pickle("./dataFrame.pkl")
 # #    print(I[a][b] / sum(I[a].values()), ", " , a, ', ',b )
 # print([I[a][b] / sum(I[a].values()) for a, b in bgrams])
 
-# query = "lasagna with tomato and mozzarella"
-# '''
-# SEARCH QUERY IN INGREDIENTS TO GET DOCUMENT ID
-# '''
-# query = clean_normalize(query)
-# list_ids_ingr = get_corrispondence(query, 'ingredients')
-# list_ids_title = get_corrispondence(query, 'title')
-# corrisp_Intersection = list(set(list_ids_title) & set(list_ids_ingr))
-# corrisp_Union = list_ids_title+list_ids_ingr
-# #print("common:", list(set(list_ids_title) & set(list_ids_ingr)))
-#
-# '''
-# COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
-# '''
-# dict_score, indexDoc_score = ranking(query) #dict_score contiene i documenti con peso > 0
-# #print(indexDoc_score.values())
-# #rimuovere i documenti che non sono rilevanti (con peso = 0), successivamente vedere se questi hanno gli id corrispondenti
-# answers = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
-# #print((data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(dict_score.values()), key=lambda x: -x[-1]))
-# #print(dict_score.values())
-#
-# y_pred, scores = [], []
-# for e, score in answers:
-#     if e in corrisp_Union:
-#         y_pred.append(1)
-#     else:
-#         y_pred.append(0)
-#     scores.append(score)
-# print(y_pred)
-# #print("Conteggio 1:", y_pred.count(1))
-# #print("Conteggio 0:", y_pred.count(0))
-#
-# precision, recall, thresholds = precision_recall_curve(y_pred, scores)
-# print(precision)
-#
-# fig, ax = plt.subplots()
-# ax.plot(recall, precision)
-# plt.show()
-#
-# I = []
-# for i, p in enumerate(precision):
-#     I.append(max(precision[:i+1]))
-#
-# #print(I)
-# #
-# # fig, ax = plt.subplots()
-# # ax.plot(recall, I)
-# # plt.show()
-#
-#
-#
-#
-#
-#
-# # urll = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY&query=Yogurt%20Greek%20Plain%20nonfat"
-# # res = requests.get(urll)
-# # js = res.json()
-# # print(js)
-# # with open('personal.json', 'w') as json_file:
-# #     json.dump(js, json_file)
-# f = open('personal.json',)
-# data = json.load(f)
-# cat_USDA = data['foods'][0]['foodCategory']
-#
-#
-# '''
-# GET ENTITIES FROM USDA
-# '''
-# # catUSDA = js['foodCategory']
-# # for x in catUSDA
-# # print(catUSDA)
-# #print(res.text)
-#
-# def call_API_2(foodName, apiKey):
-#     data = {"query" : str(foodName)}
-#     url = f'https://api.nal.usda.gov/fdc/v1/foods/search?api_key={apiKey}'
-#     r = requests.post(url, json=data)
-#     print(r.status_code)  # 200
-#     return r.json
-#
-# ingr_USDA = "Yogurt Parfaits"
-# ans = call_API_2(ingr_USDA, key_USDA)
-# print(ans)
 
-docCat_some_empty = pd.read_pickle("./some_empty.pkl")
-docCat = pd.read_pickle("./no_empty.pkl")
-
-# idx_empty = []
-# empty_list = docCat_some_empty[docCat_some_empty['Categories'].str.len()==0]
-# for doc_id in empty_list['Doc_id'].values:
-#     documents = data[data['id'] == doc_id[0]]
-#     for index, row in documents.iterrows():
-#         idx_empty.append(index)
-#         ingredients = row['ingredients']
-#         lst_categories = []
-#         for ingredient in ingredients:
-#             text = list(ingredient.values())
-#             string_conc = text[0].replace(",","%20")
-#             string_conc = string_conc.replace(" ","")
-#             urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key +"&query=" + string_conc
-#             res = requests.get(urlUSDA)
-#             js = res.json()
-#             cat_USDA = js['foods'][0]['foodCategory']
-#             lst_categories.append(cat_USDA)
-#         idx = docCat_some_empty[docCat_some_empty['Doc_id']==doc_id[0]].index.values
-#         docCat_some_empty.at[idx[0], 'Categories'] = lst_categories
-
-# get query category from USDA
-q = data.iloc[11]['Query']
-#get ingredients from this index
-qidx = data[data["Query"]== q].index.values
-row = data.loc[qidx]
-#prendo gli ingredienti a tale indice
-row = row['ingredients'].values
-lst_ingr_q = []
-for ingredients in row:
-    for ingredient in ingredients:
-        text = list(ingredient.values())
-        string_conc = text[0].replace(",", "%20")
-        string_conc = string_conc.replace(" ","")
-        urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key +"&query=" + string_conc
-        res = requests.get(urlUSDA)
-        js = res.json()
-        cat_USDA = js['foods'][0]['foodCategory']
-        lst_ingr_q.append(cat_USDA)
-
-#aggiungere questa lista alla lista delle categorie della query
-print(lst_ingr_q)
