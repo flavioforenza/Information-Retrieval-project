@@ -8,7 +8,7 @@ from nltk.tokenize import sent_tokenize
 from nltk.tokenize import word_tokenize
 from collections import defaultdict
 from gensim.parsing.preprocessing import remove_stopwords
-from data_manager import *
+import data_manager
 from tqdm.notebook import tqdm
 from usda.client import UsdaClient
 import requests
@@ -17,11 +17,13 @@ import requests
 sp = spacy.load('en_core_web_sm')
 data = pd.read_pickle("./dataFrame.pkl")
 
+
 '''
 PLOT STATISTICS DATASET
 '''
-plot_statistic('totIngredients')
-plot_statistic('totInstructions')
+if __name__ == "__main__":
+    data_manager.plot_statistic('totIngredients')
+    data_manager.plot_statistic('totInstructions')
 
 '''
 GET A RANDOM QUERY
