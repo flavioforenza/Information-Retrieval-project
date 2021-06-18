@@ -18,6 +18,9 @@ sp = spacy.load('en_core_web_sm')
 data = pd.read_pickle("./dataFrame.pkl")
 
 
+
+
+
 '''
 PLOT STATISTICS DATASET
 '''

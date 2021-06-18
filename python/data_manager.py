@@ -11,41 +11,37 @@ import numpy as np
 import pickle
 import scrape_schema_recipe as scr
 import random
+import requests
+import json
+import os
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
 from collections import defaultdict, OrderedDict
 from tqdm import tqdm
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from nltk.tokenize import word_tokenize
 from nltk.tokenize import sent_tokenize
 from sklearn.metrics import precision_recall_curve
 from usda.client import UsdaClient
-import requests
-import json
-import itertools
 
-
-folder = 'query18LowThr/'
-Nquery = 18
+threshold = 0.10
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-data = pd.read_pickle("./recipes.pkl")
-IDs = [r['_id'] for r in db.find()]
+data = pd.read_pickle("./CustomRecipesFilter.pkl")
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
-
 
 '''
 PLOT STATISTICS OF DATASET
 '''
-
+#return number of instructions/ingredients
 def counter(column):
+    IDs = data['id'].values
     list = []
     with tqdm(total=len(IDs), file=sys.stdout) as pbar:
         for obj in IDs:
@@ -59,12 +55,6 @@ def counter(column):
                     count += len(x)
             list.append(count)
     return list
-
-# FOR DEBUGGING
-#data = pd.DataFrame(list(db.find()))
-#data['totIngredients'] = counter('ingredients')
-#data['totInstructions'] = counter('instructions')
-#data.to_pickle("recipes.pkl")
 
 def plot_statistic(column):
     fix, ax = plt.subplots(1,3 , figsize=(10,5))
@@ -95,7 +85,6 @@ def clean_normalize(phrase):
 
 #return document id and tokens of a columns
 def get_id_cleanTokens(columns):
-    #print(columns[1])
     data_col = data[columns].values
     dic_id_col = {}
     with tqdm(total=len(data_col), file=sys.stdout) as pbar:
@@ -122,21 +111,14 @@ def get_id_cleanTokens(columns):
 #get_id_tokens(['id', 'instructions'])
 
 #COMPUTE THE COSINE SIMILARITY
-def search(query, corpus):
-    match = cosine_similarity(query, corpus)
-    d_s = {}
-    for i, s in sorted(enumerate(match[0]), key=lambda x: -x[1]):
-        d_s[i] = s
-    return d_s
-
 def ranking(query):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
-    vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize)
-    doc = vectorizer.fit_transform(id_instr.values())
+    vectorizer = TfidfVectorizer(tokenizer=word_tokenize)
+    docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query])
     #dict of relevant documents and scores
-    doc_score = search(q, doc)
+    doc_score = cosine_similarity(q, docs)
     return doc_score
 
 def alterQuery():
@@ -155,22 +137,7 @@ def alterQuery():
                 id_fQ.append(' '.join(list_noun))
             else:
                 id_fQ.append(list_noun[0])
-    # file = open("fakeQuery.pkl", "wb")
-    # pickle.dump(id_fQ, file)
-    # file.close()
     return id_fQ
-
-#lst_query = alterQuery()
-
-# adding column to dataframe
-#data['Query'] = fq
-# file = open("dataFrame.pkl", "wb")
-# pickle.dump(data, file)
-# file.close()
-
-#now data contain fake queries
-with open('dataFrame.pkl', 'rb') as f:
-        data = pickle.load(f)
 
 def getEntity_scrape(url):
     categories_find = {}
@@ -183,16 +150,15 @@ def getEntity_scrape(url):
                         poss_categ.append(x)
             categories_find[i] = poss_categ
         except:
-            pass
+            categories_find[i] = []
     return categories_find
 
 #take a random query from those available
-
 def rnd_query(rnd):
     category = []
     query = ""
     while not category:
-        rnd = Nquery
+        rnd = random.randint(0,len(data))
         query = data.iloc[rnd]['Query']
         query = clean_normalize(str(query))
         #extract items from web scraping
@@ -200,13 +166,19 @@ def rnd_query(rnd):
         for x, v in cat.items():
             if v:
                 category.append(v)
-    return category, query
+    if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
+        os.makedirs('imgs/query' + str(rnd) + 'thr10')
+    folder = 'imgs/query' + str(rnd) + 'thr10'
+    indexq = rnd
+    return category, query, folder, indexq
 
 #MAIN
-category, query = rnd_query(random.randint(0,len(data)))
+category, query, folder, Nquery = rnd_query(random.randint(0,len(data)))
 queryCat = np.unique(category).tolist()
-print(queryCat)
-print(query)
+print("Query index: ", Nquery)
+print("Query:", query)
+print("Categories query: ", queryCat)
+
 
 '''
 COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
@@ -217,9 +189,6 @@ indexDoc_score = ranking(query)
 #useful for obtaining the filtered ranking
 doc_score = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
 
-# open_file = open("doc_score.pkl", "wb")
-# pickle.dump(doc_score, open_file)
-# open_file.close()
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
 '''
@@ -230,7 +199,7 @@ def search_DocCategories(thr):
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
     cat_some_empty = pd.DataFrame(columns=["Doc_id", "Categories", "Score"])
     with tqdm(total=sum(i > thr for k,i in doc_score), file=sys.stdout) as pbar:
-        pbar.write("Search categories")
+        pbar.write("Search categories with Scrape-Schema-Recipe")
         for doc_id, score in doc_score:
             increment_bar +=1
             if score>thr:
@@ -239,7 +208,7 @@ def search_DocCategories(thr):
                 catCook = getEntity_scrape([url[0]])
                 pbar.update(1)
                 for index, categ in catCook.items():
-                    print(categ)
+                    #print(categ)
                     if categ:
                         cat_not_empty = cat_not_empty.append({"Doc_id":doc_id,
                                                             "Categories":categ,
@@ -252,7 +221,6 @@ def search_DocCategories(thr):
     return cat_not_empty, cat_some_empty
 
 #attivare questi
-threshold = 0.10
 docCat , docCat_some_empty= search_DocCategories(threshold)
 
 #docCat_some_empty.to_pickle("./some_empty.pkl")
@@ -295,34 +263,38 @@ def plot(precision, recall, title):
     ax2.set_xlabel('Interpolated Recall')
     ax2.set_ylabel('Precision')
     plt.figtext(.5,.90,'thr='+str(threshold)+ '    ' + 'query: ' + query,fontsize=10,ha='center')
-    plt.savefig('imgs/'+ folder + title +'.png')
+    plt.savefig('imgs/'+ folder +'.png')
     plt.show()
 
 '''
-3 METHODS TO EVALUATE RANKING (ONLY WITH SCRAPE_SCHEMA_RECIPE API)
+3 ONLY WITH SCRAPE_SCHEMA_RECIPE API
 '''
-# #1. DOCUMENTS WITHOUT ENTITIES = 1
+
+def getPred(estimate, title, lstDoc, queryCat):
+    y_pred = getCatCorrispondece(queryCat, list(lstDoc['Categories'].values), estimate)
+    d_score = lstDoc['Score'].values
+    precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+    delta = np.diff(list(reversed(recall)))
+    avgP = (delta*(list(reversed(precision))[:-1])).sum()
+    #plot(precision, recall, title)
+    return avgP
+
+#1. DOCUMENTS WITHOUT ENTITIES = 1
 estimate = 1
-y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
-d_score = docCat_some_empty['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
 title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
-plot(precision, recall, title)
+avgp = getPred(estimate, title, docCat_some_empty, queryCat)
+print("AVG OVERESTIMATED: ", avgp)
 #
-# #2. DOCUMENTS WITHOUT ENTITIES = 0
+#2. DOCUMENTS WITHOUT ENTITIES = 0
 estimate = 0
-y_pred = getCatCorrispondece(queryCat, list(docCat_some_empty['Categories'].values), estimate)
-d_score = docCat_some_empty['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
 title = 'UNDERESTIMATE SCRAPED ENTITIES = 0'
-plot(precision, recall, title)
+avgp = getPred(estimate, title, docCat_some_empty, queryCat)
+print("AVG UNDERESTIMATE: ", avgp)
 #
-# # #3. DISCARD DOCUMENTS WITHOUT ENTITIES
-y_pred = getCatCorrispondece(queryCat, list(docCat['Categories'].values), estimate)
-d_score = docCat['Score'].values
-precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
+#3. DISCARD DOCUMENTS WITHOUT ENTITIES
 title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
-plot(precision, recall, title)
+avgp = getPred(estimate, title, docCat, queryCat)
+print("AVG DISCARD: ", avgp)
 
 
 '''
@@ -334,6 +306,8 @@ def get_entities_USDA(ingredients):
     for ingredient in ingredients:
         text = list(ingredient.values())
         string_conc = text[0].replace(",", "%20")
+        string_conc = string_conc.replace("/", ",")
+        string_conc = string_conc.replace('"', ",")
         string_conc = string_conc.replace(" ", "")
         urlUSDA = "https://api.nal.usda.gov/fdc/v1/foods/search?api_key=" + key_USDA.key + "&query=" + string_conc
         try:
@@ -344,6 +318,7 @@ def get_entities_USDA(ingredients):
             continue
         lst_entities.append(cat_USDA)
     return lst_entities
+
 
 def getEntitiesDoc_USDA():
     idx_empty = []
@@ -375,11 +350,6 @@ def getEntitiesQuery_USDA():
     lst_ingr_q_USDA = get_entities_USDA(ingredients[0])
     return lst_ingr_q_USDA
 
-#save lst_ingr_q_USDA
-#open_file = open("lst_ingr_q_USDA.pkl", "wb")
-#pickle.dump(lst_ingr_q_USDA, open_file)
-#open_file.close()
-
 #attivare questi
 docCat_some_empty = getEntitiesDoc_USDA()
 lst_ingr_q_USDA = getEntitiesQuery_USDA()
@@ -389,16 +359,13 @@ def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat):
     #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
     #docCat_some_empty = pd.read_pickle("./some_empty_USDA.pkl")
     all_cat_query = queryCat+lst_ingr_q_USDA
-    estimate = 0
-    y_pred = getCatCorrispondece(all_cat_query, list(docCat_some_empty['Categories'].values), estimate)
-    d_score = docCat_some_empty['Score'].values
-    precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'DOCUMENTS WITH MIXED ENTITIES (SCRAPE+USDA)'
-    plot(precision, recall, title)
+    avgp = getPred(0, title, docCat_some_empty, all_cat_query)
+    return avgp
 
 #attivare questo
-evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat)
-
+avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat)
+print("Avg MIXED: ", avgp)
 '''
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
@@ -406,9 +373,9 @@ SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 doc_USDAEntity = {}
 def only_USDA():
     with tqdm(total=sum(i > threshold for k,i in doc_score), file=sys.stdout) as pbar:
-        pbar.write("Search categories in USDA DB")
+        pbar.write("Search entities in USDA Database...")
         for doc_id, score in doc_score:
-            print("Entity search: document #", doc_id[0])
+            #print("Entity search: document #", doc_id[0])
             if score > threshold:
                 row = (data.loc[data['id'] == doc_id[0]])
                 ingredients = row['ingredients'].values
@@ -422,7 +389,7 @@ def only_USDA():
 only_USDA()
 
 def plot_only_USDA():
-    #a_file = open("doc_USDAEntity.pkl", "rb")
+    #a_file = open("wdoc_USDAEntity.pkl", "rb")
     #doc_USDAEntity = pickle.load(a_file)
     #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
     #remove warning numpy
@@ -431,11 +398,14 @@ def plot_only_USDA():
     d_score = [i for k,i in doc_score if i>threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
-    plot(precision, recall, title)
+    #plot(precision, recall, title)
+    delta = np.diff(list(reversed(recall)))
+    avgP = (delta * (list(reversed(precision))[:-1])).sum()
+    return avgP
 
 #attivare questo
-plot_only_USDA()
-
+avgP = plot_only_USDA()
+print("Avg only USDA: ", avgP)
 '''
 PCA
 '''
@@ -471,52 +441,8 @@ def showPCA(query, doc_score):
 #attivare questo
 showPCA(query, doc_score)
 
-#showPCA(query, doc_score)
+
 ''''
 LANGUAGE MODEL
 1. Infer a LM for each document (PAG. 224)
 '''
-#lavora su doc_score
-#prendere l'id di doc_score e confrontarlo con quello presente in id_instructions
-#quindi prendere da id_instruction il relativo documento e creare il languafe models
-
-# with open('id_instructions.pkl', 'rb') as f:
-#     id_instr = pickle.load(f)
-# with open('doc_score.pkl', 'rb') as f:
-#     doc_score = pickle.load(f)
-#
-# LMs_doc = {}
-# for doc, score in doc_score:
-#     LM = defaultdict(lambda: defaultdict(lambda: 0))
-#     if score>0:
-#         if id_instr[doc[0]]:
-#             instructions = id_instr[doc[0]]
-#             for sentence in sent_tokenize(instructions):
-#                 tokens = ['#S'] + word_tokenize(sentence) + ['#F']
-#                 for (a, b) in nltk.ngrams(tokens, 2):
-#                     LM[a][b] += 1
-#             LMs_doc[doc[0]] = LM
-#
-# qy = clean_normalize(query)
-# print("New Query: ", qy)
-#
-# bgrams = nltk.ngrams(['#S'] + word_tokenize(qy) + ['#F'], 2)
-# print(bgrams)
-#
-# for a, b in bgrams:
-#     print(a,b)
-#
-# #implement a smoothing
-# for k,v in LMs_doc.items():
-#     print([v[a][b] / sum(v[a].values()) for a, b in bgrams])
-
-
-
-
-
-
-# all_relevant_queries = []
-# for doc_id, score in doc_score:
-#     if score > threshold:
-#         pp = data[data['id']==doc_id[0]]['Query'].values
-#         all_relevant_queries.append(str(pp[0]))
