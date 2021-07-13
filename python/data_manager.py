@@ -423,19 +423,19 @@ def only_USDA():
                 entities = get_entities_USDA(ingredients[0])
                 doc_USDAEntity[doc_id[0]] = entities
                 pbar.update(1)
-    # a_file = open("doc_USDAEntity.pkl", "wb")
-    # pickle.dump(doc_USDAEntity, a_file)
-    # a_file.close()
+
 #attivare questo
-only_USDA()
+#only_USDA()
 
 def plot_only_USDA():
     #a_file = open("wdoc_USDAEntity.pkl", "rb")
     #doc_USDAEntity = pickle.load(a_file)
     #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
+
     #remove warning numpy
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
-    y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
+    y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(docCat_some_empty['USDA'].values), 0)
+    #y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
     d_score = [i for k,i in doc_score if i>threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
@@ -462,7 +462,7 @@ def showPCA(query, doc_score):
             all_relevant_documents.append(id_instr[doc_id[0]])
 
     #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
-    vectorizer = TfidfVectorizer(tokenizer=nltk.word_tokenize)
+    vectorizer = TfidfVectorizer(tokenizer=text_to_word_sequence)
     documents = vectorizer.fit_transform(all_relevant_documents)
     qr = vectorizer.transform([query])
 
@@ -477,26 +477,21 @@ def showPCA(query, doc_score):
                 cmap=plt.cm.get_cmap('Paired', 10), label = 'Query', s=300)
     plt.title('PCA' + '    thr='+str(threshold)+ '    ' + 'query: ' + query)
     plt.legend()
-    plt.savefig('imgs/'+folder+'PCA')
+    #plt.savefig('imgs/'+folder+'PCA')
     plt.show()
 
 #attivare questo
 showPCA(query, doc_score)
-
 
 ''''
 LANGUAGE MODEL
 1. Infer a LM for each document (PAG. 224)
 '''
 
-#get the weight as threshold
-threshold = [v for k,v in doc_score if k == id_doc]
-print("Threshold: ", threshold)
-
 for (id,w) in doc_score:
     if id == id_doc:
         print("Index with TFIDF: ", doc_score.index((id,w)))
-        print("Score document: ", w)
+        print("Target document score: ", w)
 
 ''''
 LANGUAGE MODEL
