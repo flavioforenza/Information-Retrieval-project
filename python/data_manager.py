@@ -14,10 +14,12 @@ import random
 import requests
 import json
 import os
+from gensim.utils import tokenize
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
 from collections import defaultdict, OrderedDict
 from tqdm import tqdm
+from collections import defaultdict
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.decomposition import PCA
@@ -25,14 +27,15 @@ from nltk.tokenize import word_tokenize
 from nltk.tokenize import sent_tokenize
 from sklearn.metrics import precision_recall_curve
 from usda.client import UsdaClient
+from keras.preprocessing.text import text_to_word_sequence
+from nltk.util import ngrams
 
-threshold = 0.10
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-data = pd.read_pickle("./CustomRecipesFilter.pkl")
+data = pd.read_pickle("./CustomRecipes.pkl")
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
 
@@ -56,6 +59,12 @@ def counter(column):
             list.append(count)
     return list
 
+# FOR DEBUGGING
+#data = pd.DataFrame(list(db.find()))
+#data['totIngredients'] = counter('ingredients')
+#data['totInstructions'] = counter('instructions')
+#data.to_pickle("recipes.pkl")
+
 def plot_statistic(column):
     fix, ax = plt.subplots(1,3 , figsize=(10,5))
     sns.distplot(data[column].values, axlabel= column, kde= False, ax=ax[0])
@@ -65,6 +74,27 @@ def plot_statistic(column):
     plt.tight_layout()
     # plt.savefig('imgs/statistic' + column)
     # plt.show()
+
+'''
+SWITCH TOKENIZERS
+'''
+def spacy_tokenizer(text=None):
+    tokens = []
+    doc = sp(text)
+    for token in doc:
+        tokens.append(token.text)
+    return tokens
+
+
+def tokenizer(tokenizer, argument = None):
+    switcher={
+        'spacy': spacy_tokenizer(argument),
+        'gensim': tokenize(argument),
+        'keras': text_to_word_sequence(argument),
+        'nltk': word_tokenize(argument)
+    }
+    func = switcher.get(tokenizer, lambda:'Invalid tokenizer')
+    return func
 
 #drop stop_words, punctuation and apply lemmatization
 def clean_normalize(phrase):
@@ -114,7 +144,7 @@ def get_id_cleanTokens(columns):
 def ranking(query):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
-    vectorizer = TfidfVectorizer(tokenizer=word_tokenize)
+    vectorizer = TfidfVectorizer(tokenizer=text_to_word_sequence)
     docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query])
     #dict of relevant documents and scores
@@ -154,30 +184,33 @@ def getEntity_scrape(url):
     return categories_find
 
 #take a random query from those available
-def rnd_query(rnd):
+def rnd_query():
     category = []
     query = ""
+    print("Looking for a query...")
     while not category:
-        rnd = random.randint(0,len(data))
+        #rnd = random.randint(0, len(data))
+        #rnd = 48566
+        rnd = 11
+        cat = [data.iloc[rnd]['Scrape']]
+        if len(cat[0])==0:
+            continue
+        id_doc = data.iloc[rnd]['id']
         query = data.iloc[rnd]['Query']
         query = clean_normalize(str(query))
-        #extract items from web scraping
-        cat = getEntity_scrape([data.iloc[rnd]['url']])
-        for x, v in cat.items():
-            if v:
-                category.append(v)
-    if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
-        os.makedirs('imgs/query' + str(rnd) + 'thr10')
+        category.append(cat)
+    # if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
+    #     os.makedirs('imgs/query' + str(rnd) + 'thr10')
     folder = 'imgs/query' + str(rnd) + 'thr10'
-    indexq = rnd
-    return category, query, folder, indexq
+    return category, query, folder, id_doc, rnd
 
 #MAIN
-category, query, folder, Nquery = rnd_query(random.randint(0,len(data)))
+category, query, folder, id_doc, idx_q = rnd_query()
 queryCat = np.unique(category).tolist()
-print("Query index: ", Nquery)
 print("Query:", query)
+print("Query idx: ", idx_q)
 print("Categories query: ", queryCat)
+print("Id Doc: ", id_doc)
 
 
 '''
@@ -186,15 +219,24 @@ COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
 #MAIN
 #attivere questi
 indexDoc_score = ranking(query)
+
 #useful for obtaining the filtered ranking
-doc_score = [(data.loc[[i]]['id'].values, w) for i,w in sorted(enumerate(indexDoc_score.values()), key=lambda x: -x[-1])]
+doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexDoc_score[0]), key=lambda x: -x[-1])]
+
+#get the weight as threshold
+threshold = [v for k,v in doc_score if k == id_doc]
+print("Threshold: ", threshold)
+
+for (id,w) in doc_score:
+    if id == id_doc:
+        print("Index with TFIDF: ", doc_score.index((id,w)))
+        print("Score document: ", w)
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
 '''
 def search_DocCategories(thr):
-    #lista con documenti e cagtegorie(non vuote)
-    #print("Documenti rilevanti: ", sum(i > thr for k, i in doc_score))
+    data = pd.read_pickle("./OriginalRecipes.pkl")
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
     cat_some_empty = pd.DataFrame(columns=["Doc_id", "Categories", "Score"])
@@ -208,7 +250,6 @@ def search_DocCategories(thr):
                 catCook = getEntity_scrape([url[0]])
                 pbar.update(1)
                 for index, categ in catCook.items():
-                    #print(categ)
                     if categ:
                         cat_not_empty = cat_not_empty.append({"Doc_id":doc_id,
                                                             "Categories":categ,
@@ -220,14 +261,12 @@ def search_DocCategories(thr):
                                                        ignore_index=True)
     return cat_not_empty, cat_some_empty
 
-#attivare questi
-docCat , docCat_some_empty= search_DocCategories(threshold)
+#docCat , docCat_some_empty= search_DocCategories(threshold[0])
 
-#docCat_some_empty.to_pickle("./some_empty.pkl")
-#docCat.to_pickle("./no_empty.pkl")
+relevant = [k[0] for k, i in doc_score if i > threshold]
+docCat_some_empty = data[data['id'].isin(relevant)]
+docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
 
-#docCat_some_empty = pd.read_pickle("./some_empty.pkl")
-#docCat = pd.read_pickle("./no_empty.pkl")
 '''
 SEARCH CATEGORY CORRESPONDENCE - 1st METHOD
 --- USE ENTITIES FROM SCRAPE_SCHEMA_RECIPE API ---
@@ -271,8 +310,9 @@ def plot(precision, recall, title):
 '''
 
 def getPred(estimate, title, lstDoc, queryCat):
-    y_pred = getCatCorrispondece(queryCat, list(lstDoc['Categories'].values), estimate)
-    d_score = lstDoc['Score'].values
+    y_pred = getCatCorrispondece(queryCat, list(lstDoc['Scrape'].values), estimate)
+    d_score = [w for id, w in doc_score if w > threshold and lstDoc['id'].isin(id).any().any()]
+    #d_score = lstDoc['Score'].values
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
@@ -284,13 +324,13 @@ estimate = 1
 title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
 avgp = getPred(estimate, title, docCat_some_empty, queryCat)
 print("AVG OVERESTIMATED: ", avgp)
-#
+
 #2. DOCUMENTS WITHOUT ENTITIES = 0
 estimate = 0
 title = 'UNDERESTIMATE SCRAPED ENTITIES = 0'
 avgp = getPred(estimate, title, docCat_some_empty, queryCat)
 print("AVG UNDERESTIMATE: ", avgp)
-#
+
 #3. DISCARD DOCUMENTS WITHOUT ENTITIES
 title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
 avgp = getPred(estimate, title, docCat, queryCat)
@@ -342,7 +382,7 @@ def getEntitiesDoc_USDA():
 
 # get query category from USDA
 def getEntitiesQuery_USDA():
-    q = data.iloc[Nquery]['Query']
+    q = data.iloc[id_doc]['Query']
     #get ingredients from this index
     qidx = data[data["Query"]==q].index.values
     row = data.loc[qidx]
@@ -353,7 +393,6 @@ def getEntitiesQuery_USDA():
 #attivare questi
 docCat_some_empty = getEntitiesDoc_USDA()
 lst_ingr_q_USDA = getEntitiesQuery_USDA()
-
 
 def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat):
     #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
@@ -406,6 +445,7 @@ def plot_only_USDA():
 #attivare questo
 avgP = plot_only_USDA()
 print("Avg only USDA: ", avgP)
+
 '''
 PCA
 '''
@@ -446,3 +486,155 @@ showPCA(query, doc_score)
 LANGUAGE MODEL
 1. Infer a LM for each document (PAG. 224)
 '''
+
+#get the weight as threshold
+threshold = [v for k,v in doc_score if k == id_doc]
+print("Threshold: ", threshold)
+
+for (id,w) in doc_score:
+    if id == id_doc:
+        print("Index with TFIDF: ", doc_score.index((id,w)))
+        print("Score document: ", w)
+
+''''
+LANGUAGE MODEL
+1. Infer a LM for each document (PAG. 224)
+'''
+
+with open('id_instructions.pkl', 'rb') as f:
+    id_instr = pickle.load(f)
+
+# k-grams (s_min=2)
+def skip(sequence, s=2):
+    k_grams = []
+    for i in range(len(sequence)):
+        for j in range(i + 1, min(i + s, len(sequence))):
+            k_grams.append((sequence[i], sequence[j]))
+    return k_grams
+
+def getLM_docs():
+    LMs_doc = {}
+    ranking_id = []
+    for doc, score in doc_score:
+        LM = defaultdict(lambda: defaultdict(lambda: 0))
+        if score>=threshold:
+            ranking_id.append(doc)
+            if id_instr[doc[0]]:
+                instructions = id_instr[doc[0]]
+                tokens = text_to_word_sequence(instructions)
+                tokens = ["#S"] + tokens + ["#E"]
+                for (a, b) in list(skip(tokens)):
+                    LM[a][b] += 1
+            LMs_doc[doc[0]] = LM
+    return LMs_doc, ranking_id
+
+def getVoc_doc(id):
+    instructions = id_instr[id]
+    tokens = spacy_tokenizer(instructions)
+    len_tokens = len(np.unique(tokens))
+    return  len_tokens
+
+#len of vocabulary from all models
+l_singl = 23093
+
+def Laplace_smooth(LMs, bgrams):
+    bgr = list(bgrams)
+    new_dict = {}
+    for key,v in LMs.items():
+        lst_prod = []
+        for a, b in bgr:
+            diff = (1 + v[a][b])/(sum(v[a].values()) + l_singl)
+            lst_prod.append(diff)
+        prod = np.prod(lst_prod)
+        new_dict[key] = prod
+    return new_dict
+
+# Linear Interpolation Smoothing
+# P(w|d)=\lambdaP(q|Md)+(1-\lambda)P(q|Mc)
+def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
+    new_dict = {}
+    for doc_id, LM in LMdocs.items():
+        bigramDoc = []
+        bigramColl = []
+        for a,b in qGrams:
+            if LM[a][b] > 0: #bi-grams (numeratore)
+                #check if denominator (unigram-->count(wi-1)) exist
+                if sum(LM[a].values())>0:
+                    bigramDoc.append((LM[a][b])/sum(LM[a].values()))
+                    bigramColl.append(LM_coll[a][b]/sum(LM_coll[a].values()))
+                    #bigramColl.append(sum(LM[a].values())/len(LM))
+                else: #in this case unigram not exist --> scale down at (n−1)grams --> zero-gram 1/|V|
+                    A = 1/l_singl
+                    bigramColl.append(A)
+                    #compute unigram of b
+                    if sum(LM[b].values())>0:
+                        len_LM = len(LM)
+                        B = LM[b].values()/len_LM #unigram
+                    else: #zero-gram
+                        B = 1/l_singl
+                    bigramDoc.append(A*B)
+            else:
+                if sum(LM[a].values())>0:
+                    len_LM = len(LM)
+                    A = sum(LM[a].values())/len_LM
+                else: #in this case unigram not exist --> scale down at (n−1)grams --> zero-gram 1/|V|
+                    A = 1/l_singl
+                bigramColl.append(A) #p(w|Mc)
+                    #compute unigram of b
+                if sum(LM[b].values())>0:
+                    len_LM = len(LM)
+                    B = sum(LM[b].values())/len_LM
+                else: #zero-gram
+                    B = 1/l_singl
+                bigramDoc.append(A*B) #p(wi-1,wi|Md)
+        prodDocs = np.prod(bigramDoc) #P(q|Md) #bigram/unigram/zerogram
+        prodColl = np.prod(bigramColl) #P(q|Mc) #unigram(wi-1)/zerogram
+        # P(w|d)=\lambdaP(q|Md)+(1-\lambda)P(q|Mc)
+        resultInterp = lamb*prodDocs+(1-lamb2)*prodColl
+        new_dict[doc_id] = resultInterp
+    return new_dict
+
+#LM of entire collection
+def getLM_coll():
+    LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
+    for doc, score in doc_score:
+        if score>=threshold:
+            if id_instr[doc[0]]:
+                instructions = id_instr[doc[0]]
+                tokens = text_to_word_sequence(instructions)
+                for (a, b) in list(skip(tokens)):
+                    LM_coll[a][b] += 1
+    return LM_coll
+
+def LM_query(q):
+    tokens = text_to_word_sequence(q)
+    tokens = ["#S"] + tokens + ["#E"]
+    bigram = list(ngrams(tokens, 2))
+    return bigram
+
+LM_d, remaining_doc = getLM_docs()
+print("#Documenti rilevanti: ", len(remaining_doc))
+
+bigram_q = LM_query(query)
+
+scoreMLE = Laplace_smooth(LM_d, bigram_q)
+tmp = sorted(scoreMLE.items(), key=lambda x: -x[-1])
+
+for (id,w) in tmp:
+    if id == id_doc:
+        print("#########################")
+        print("Index with Laplace smoothing: ", tmp.index((id,w)))
+        print("Score document: ", w)
+        print("#########################")
+
+LM_coll = getLM_coll()
+scoreDc = LinInterp_Smooth(LM_d, bigram_q, 0,0, LM_coll)
+tmp = sorted(scoreDc.items(), key=lambda x: -x[-1])
+for (id,w) in tmp:
+    if id == id_doc:
+        print("#########################")
+        print("Index with Linear interpolation smoothing: ", tmp.index((id,w)))
+        print("Score document: ", w)
+        print("#########################")
+print("Finish")
+
