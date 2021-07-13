@@ -251,13 +251,11 @@ def search_DocCategories(thr):
                 pbar.update(1)
                 for index, categ in catCook.items():
                     if categ:
-                        cat_not_empty = cat_not_empty.append({"Doc_id":doc_id,
-                                                            "Categories":categ,
-                                                            "Score":score},
+                        cat_not_empty = cat_not_empty.append({"id":doc_id,
+                                                            "Scrape":categ},
                                                            ignore_index=True)
-                    cat_some_empty = cat_some_empty.append({"Doc_id":doc_id,
-                                                        "Categories":categ,
-                                                        "Score":score},
+                    cat_some_empty = cat_some_empty.append({"id":doc_id,
+                                                        "Scrape":categ},
                                                        ignore_index=True)
     return cat_not_empty, cat_some_empty
 
@@ -312,7 +310,6 @@ def plot(precision, recall, title):
 def getPred(estimate, title, lstDoc, queryCat):
     y_pred = getCatCorrispondece(queryCat, list(lstDoc['Scrape'].values), estimate)
     d_score = [w for id, w in doc_score if w > threshold and lstDoc['id'].isin(id).any().any()]
-    #d_score = lstDoc['Score'].values
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
@@ -361,20 +358,21 @@ def get_entities_USDA(ingredients):
 
 
 def getEntitiesDoc_USDA():
+    data = pd.read_pickle("./OriginalRecipes.pkl")
     idx_empty = []
-    empty_list = docCat_some_empty[docCat_some_empty['Categories'].str.len() == 0]
+    empty_list = docCat_some_empty[docCat_some_empty['Scrape'].str.len() == 0]
     with tqdm(total=len(empty_list), file=sys.stdout) as pbar:
         pbar.write("Search Entities in USDA Database for remaining documents ...")
-        for doc_id in empty_list['Doc_id'].values:
-            documents = data[data['id'] == doc_id[0]]
+        for doc_id in empty_list['id'].values:
+            documents = data[data['id'] == doc_id]
             for index, row in documents.iterrows():
                 idx_empty.append(index)
                 ingredients = row['ingredients']
                 lst_categories = get_entities_USDA(ingredients)
                 pbar.update(1)
                 #add entities USDA with scraped entities
-                idx = docCat_some_empty[docCat_some_empty['Doc_id'] == doc_id[0]].index.values
-                docCat_some_empty.at[idx[0], 'Categories'] = lst_categories
+                idx = docCat_some_empty[docCat_some_empty['id'] == doc_id].index.values
+                docCat_some_empty.at[idx[0], 'USDA'] = lst_categories
     return docCat_some_empty
 
 #nuovo dataframe contenete le categorie di USDA e del web scraping
@@ -390,16 +388,20 @@ def getEntitiesQuery_USDA():
     lst_ingr_q_USDA = get_entities_USDA(ingredients[0])
     return lst_ingr_q_USDA
 
-#attivare questi
-docCat_some_empty = getEntitiesDoc_USDA()
-lst_ingr_q_USDA = getEntitiesQuery_USDA()
+#ricerca delle categorie dei documenti rilevanti con scrape vuoto
+#docCat_some_empty = getEntitiesDoc_USDA()
+#categorie ingredienti query
+#lst_ingr_q_USDA = getEntitiesQuery_USDA()
+
+lst_ingr_q_USDA = data.iloc[idx_q]['USDA']
 
 def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat):
-    #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
-    #docCat_some_empty = pd.read_pickle("./some_empty_USDA.pkl")
     all_cat_query = queryCat+lst_ingr_q_USDA
     title = 'DOCUMENTS WITH MIXED ENTITIES (SCRAPE+USDA)'
-    avgp = getPred(0, title, docCat_some_empty, all_cat_query)
+    datatemp = pd.DataFrame(columns=['id','Scrape'])
+    datatemp['id'] = docCat_some_empty['id']
+    datatemp['Scrape'] = docCat_some_empty['Scrape'] + docCat_some_empty['USDA']
+    avgp = getPred(0, title, datatemp, all_cat_query)
     return avgp
 
 #attivare questo
