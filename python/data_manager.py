@@ -32,10 +32,11 @@ from nltk.util import ngrams
 
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
-data2 = pd.read_pickle("./CustomRecipesFilter.pkl")
+data = pd.read_pickle("./CustomRecipesFilter.pkl")
+data.index = range(0,len(data))
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-data = pd.read_pickle("./CustomRecipes.pkl")
+#data = pd.read_pickle("./CustomRecipes.pkl")
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
 
@@ -189,9 +190,10 @@ def rnd_query():
     query = ""
     print("Looking for a query...")
     while not category:
-        #rnd = random.randint(0, len(data))
+        rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 29560
+        #rnd = 29560
+        #rnd = 10
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -484,11 +486,6 @@ def showPCA(query, doc_score):
 #attivare questo
 showPCA(query, doc_score)
 
-for (id,w) in doc_score:
-    if id == id_doc:
-        print("Index with TFIDF: ", doc_score.index((id,w)))
-        print("Target document score: ", w)
-
 ''''
 LANGUAGE MODEL
 1. Infer a LM for each document (PAG. 224)
@@ -592,7 +589,6 @@ def getLM_coll(step):
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
     for doc, score in doc_score:
         if score>=threshold:
-            print("Doc id stop: ", doc[0])
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
                 tokens = text_to_word_sequence(instructions)
