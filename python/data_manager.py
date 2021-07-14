@@ -32,7 +32,7 @@ from nltk.util import ngrams
 
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
-
+data2 = pd.read_pickle("./CustomRecipesFilter.pkl")
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 data = pd.read_pickle("./CustomRecipes.pkl")
@@ -191,7 +191,7 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 11
+        rnd = 29560
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -201,7 +201,8 @@ def rnd_query():
         category.append(cat)
     # if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
     #     os.makedirs('imgs/query' + str(rnd) + 'thr10')
-    folder = 'imgs/query' + str(rnd) + 'thr10'
+    folder = ''
+    #folder = 'imgs/query' + str(rnd) + 'thr10'
     return category, query, folder, id_doc, rnd
 
 #MAIN
@@ -300,7 +301,7 @@ def plot(precision, recall, title):
     ax2.set_xlabel('Interpolated Recall')
     ax2.set_ylabel('Precision')
     plt.figtext(.5,.90,'thr='+str(threshold)+ '    ' + 'query: ' + query,fontsize=10,ha='center')
-    plt.savefig('imgs/'+ folder +'.png')
+    #plt.savefig('imgs/'+ folder +'.png')
     plt.show()
 
 '''
@@ -483,11 +484,6 @@ def showPCA(query, doc_score):
 #attivare questo
 showPCA(query, doc_score)
 
-''''
-LANGUAGE MODEL
-1. Infer a LM for each document (PAG. 224)
-'''
-
 for (id,w) in doc_score:
     if id == id_doc:
         print("Index with TFIDF: ", doc_score.index((id,w)))
@@ -509,7 +505,7 @@ def skip(sequence, s=2):
             k_grams.append((sequence[i], sequence[j]))
     return k_grams
 
-def getLM_docs():
+def getLM_docs(step):
     LMs_doc = {}
     ranking_id = []
     for doc, score in doc_score:
@@ -520,7 +516,7 @@ def getLM_docs():
                 instructions = id_instr[doc[0]]
                 tokens = text_to_word_sequence(instructions)
                 tokens = ["#S"] + tokens + ["#E"]
-                for (a, b) in list(skip(tokens)):
+                for (a, b) in list(skip(tokens, step)):
                     LM[a][b] += 1
             LMs_doc[doc[0]] = LM
     return LMs_doc, ranking_id
@@ -592,14 +588,16 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
     return new_dict
 
 #LM of entire collection
-def getLM_coll():
+def getLM_coll(step):
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
     for doc, score in doc_score:
         if score>=threshold:
+            print("Doc id stop: ", doc[0])
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
                 tokens = text_to_word_sequence(instructions)
-                for (a, b) in list(skip(tokens)):
+                tokens = ["#S"] + tokens + ["#E"]
+                for (a, b) in list(skip(tokens, step)):
                     LM_coll[a][b] += 1
     return LM_coll
 
@@ -609,29 +607,71 @@ def LM_query(q):
     bigram = list(ngrams(tokens, 2))
     return bigram
 
-LM_d, remaining_doc = getLM_docs()
-print("#Documenti rilevanti: ", len(remaining_doc))
 
-bigram_q = LM_query(query)
+def getIndexRelDoc(tmp):
+    doc_rel = 0
+    for (id,w) in tmp:
+        if id == id_doc:
+            doc_rel = tmp.index((id,w))
+    return doc_rel
 
-scoreMLE = Laplace_smooth(LM_d, bigram_q)
-tmp = sorted(scoreMLE.items(), key=lambda x: -x[-1])
+def optimals_parameters():
+    dicLapl = {}
+    dicInterp = {}
+    for n in range(2 , 10, 1):
+        LM_coll = getLM_coll(n)
+        LM_d, remaining_doc = getLM_docs(n)
+        #Laplace smoothing
+        bigram_q = LM_query(query)
+        scoreMLE = Laplace_smooth(LM_d, bigram_q)
+        tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
+        doc_rel_Lap = getIndexRelDoc(tmpLaplace)
+        dicLapl[n] = doc_rel_Lap
+        #Interpolation Smoothing
+        lambda1 = 0
+        lambda2 = 1
+        results = {}
+        for k in np.arange(0.1, 1.1, 0.1):
+            scoreDc = LinInterp_Smooth(LM_d, bigram_q, lambda1, lambda2, LM_coll)
+            tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
+            doc_rec_Int = getIndexRelDoc(tmpInterp)
+            results[(lambda1, lambda2)] = doc_rec_Int
+            lambda1 = 0 + k
+            lambda2 = 1 - k
+            if lambda2==0:
+                break
+        best = 0
+        minimum = min(results.items(), key=lambda x:x[1])
+        dicInterp[n] = minimum
+    index = len(data)+1
+    smoothing = ""
+    ngram = 0
+    l1 = 0
+    l2 = 0
+    for k1,v1 in dicLapl.items():
+        for k2,v2 in dicInterp.items():
+            if v1 < v2[1]:
+                if index<v1:
+                    break
+                else:
+                    index = v1
+                smoothing = 'Laplace'
+                ngram = k1
+            else:
+                if index < v2[1]:
+                    break
+                else:
+                    index = v2[1]
+                smoothing = 'Interpolation'
+                ngram = k2
+                l1 = v2[0][0]
+                l2 = v2[0][1]
+    print("Best smoothing: ", smoothing)
+    print("Index result: ", index)
+    print("N-gram: ", ngram)
+    if smoothing == 'Interpolation':
+        print("Lambda1: ", l1)
+        print("Lambda2: ", l2)
 
-for (id,w) in tmp:
-    if id == id_doc:
-        print("#########################")
-        print("Index with Laplace smoothing: ", tmp.index((id,w)))
-        print("Score document: ", w)
-        print("#########################")
 
-LM_coll = getLM_coll()
-scoreDc = LinInterp_Smooth(LM_d, bigram_q, 0,0, LM_coll)
-tmp = sorted(scoreDc.items(), key=lambda x: -x[-1])
-for (id,w) in tmp:
-    if id == id_doc:
-        print("#########################")
-        print("Index with Linear interpolation smoothing: ", tmp.index((id,w)))
-        print("Score document: ", w)
-        print("#########################")
-print("Finish")
-
+optimals_parameters()
