@@ -192,10 +192,10 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 29560
+        #rnd = 34582 #Interpolation
         rnd = 11
         #rnd = 37384
-        #rnd = 37384
+        #rnd = 16068
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -222,7 +222,6 @@ print("Id Doc: ", id_doc)
 COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
 '''
 #MAIN
-#attivere questi
 indexDoc_score = ranking(query)
 
 #useful for obtaining the filtered ranking
@@ -608,15 +607,18 @@ def getIndexRelDoc(tmp):
 def optimals_parameters():
     dicLapl = {}
     dicInterp = {}
-    for n in range(2 , 10, 1):
+    ranking_Laplace = []
+    ranking_Interp = []
+    for n in range(2 , 11, 1):
         LM_coll = getLM_coll(n)
         LM_d, remaining_doc = getLM_docs(n)
         #Laplace smoothing
         bigram_q = LM_query(query)
         scoreMLE = Laplace_smooth(LM_d, bigram_q)
         tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
+        ranking_Laplace.append(tmpLaplace)
         doc_rel_Lap = getIndexRelDoc(tmpLaplace)
-        dicLapl[n] = doc_rel_Lap
+        dicLapl[(n, tuple(tmpLaplace))] = doc_rel_Lap
         #Interpolation Smoothing
         lambda1 = 0
         lambda2 = 1
@@ -624,44 +626,49 @@ def optimals_parameters():
         for k in np.arange(0.1, 1.1, 0.1):
             scoreDc = LinInterp_Smooth(LM_d, bigram_q, lambda1, lambda2, LM_coll)
             tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
-            doc_rec_Int = getIndexRelDoc(tmpInterp)
-            results[(lambda1, lambda2)] = doc_rec_Int
+            doc_rel_Int = getIndexRelDoc(tmpInterp)
+            results[(lambda1, lambda2, tuple(tmpInterp))] = doc_rel_Int
             lambda1 = 0 + k
             lambda2 = 1 - k
             if lambda2==0:
                 break
         minimum = min(results.items(), key=lambda x:x[1])
         dicInterp[n] = minimum
+    ranking = []
     index = len(data)+1
     smoothing = ""
     ngram = 0
     l1 = 0
     l2 = 0
-    for k1,v1 in dicLapl.items():
+    for (k1,ran),v1 in dicLapl.items():
         for k2,v2 in dicInterp.items():
             if v1 < v2[1]:
                 if index<v1:
                     break
                 else:
                     index = v1
-                smoothing = 'Laplace'
-                ngram = k1
+                    ngram = k1
+                    smoothing = 'Laplace'
+                    ranking = ran
             else:
                 if index < v2[1]:
                     break
                 else:
                     index = v2[1]
-                smoothing = 'Interpolation'
-                ngram = k2
-                l1 = v2[0][0]
-                l2 = v2[0][1]
+                    ngram = k2
+                    smoothing = 'Interpolation'
+                    l1 = v2[0][0]
+                    l2 = v2[0][1]
+                    ranking = v2[0][2]
     print("Best smoothing: ", smoothing)
     print("Index result: ", index)
     print("N-gram: ", ngram)
     if smoothing == 'Interpolation':
         print("Lambda1: ", l1)
         print("Lambda2: ", l2)
-    return index, smoothing, ngram, l1, l2
+    return index, smoothing, ngram, l1, l2, ranking
 
 
-index, smoothing, ngram, lmb1, lmb2 = optimals_parameters()
+index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters()
+idxx = getIndexRelDoc(list(newRanking))
+print(idxx)
