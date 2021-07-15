@@ -578,10 +578,10 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
     return new_dict
 
 #LM of entire collection
-def getLM_coll(step, documents = doc_score):
+def getLM_coll(step, documents = doc_score, thr = threshold):
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
     for doc, score in documents:
-        if score>=threshold:
+        if score>=thr:
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
                 tokens = text_to_word_sequence(instructions)
@@ -665,7 +665,7 @@ def optimals_parameters():
         print("Lambda2: ", l2)
     return index, smoothing, ngram, l1, l2, ranking
 
-
+#Co_-Occurrence method
 index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters()
 tokens = text_to_word_sequence(query)
 newRanking = list(newRanking)
@@ -675,12 +675,26 @@ for i in range(0, index+1):
 thr_new = newRanking[index][1]
 LM_d, remaining_doc = getLM_docs(ngram, relevant_documents, thr_new)
 
-#numero di occorrenze termini della query nei LMs dei documenti rilevanti
-for key, v in LM_d.items():
-    print("###########################")
-    for token in tokens:
-        for word, count in v[token].items():
-            print(token, " ", word, ": ", count)
+LM_coll = getLM_coll(ngram, relevant_documents, thr_new)
+other_words = {k: [] for k in tokens}
+for token in tokens:
+     for word, count in LM_coll[token].items():
+        other_words[token].append((word,count))
+        print(token, " ", word, ": ", count)
+
+result = {k: [] for k in tokens}
+for qtok in tokens:
+    max_value = max(other_words[qtok], key=lambda x:x[1])
+    remaining = [(word, count) for (word, count)  in other_words[qtok] if count==max_value[1]]
+    result[qtok].append([i for i in remaining])
+
+for k,v in result.items():
+    print(k)
+    for i in v:
+        if len(i)==1:
+            print(i[0][0])
+        else:
+            for tup in i:
+                print(tup[0])
 
 
-#Co_-Occurence method
