@@ -192,8 +192,8 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 34582 #Interpolation
-        rnd = 11
+        rnd = 34582 #Interpolation
+        #rnd = 11
         #rnd = 37384
         #rnd = 16068
         cat = [data.iloc[rnd]['Scrape']]
@@ -495,12 +495,12 @@ def skip(sequence, s=2):
             k_grams.append((sequence[i], sequence[j]))
     return k_grams
 
-def getLM_docs(step):
+def getLM_docs(step, documents = doc_score, thr = threshold):
     LMs_doc = {}
     ranking_id = []
-    for doc, score in doc_score:
+    for doc, score in documents:
         LM = defaultdict(lambda: defaultdict(lambda: 0))
-        if score>=threshold:
+        if score>=thr:
             ranking_id.append(doc)
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
@@ -578,9 +578,9 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
     return new_dict
 
 #LM of entire collection
-def getLM_coll(step):
+def getLM_coll(step, documents = doc_score):
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
-    for doc, score in doc_score:
+    for doc, score in documents:
         if score>=threshold:
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
@@ -607,8 +607,6 @@ def getIndexRelDoc(tmp):
 def optimals_parameters():
     dicLapl = {}
     dicInterp = {}
-    ranking_Laplace = []
-    ranking_Interp = []
     for n in range(2 , 11, 1):
         LM_coll = getLM_coll(n)
         LM_d, remaining_doc = getLM_docs(n)
@@ -616,7 +614,6 @@ def optimals_parameters():
         bigram_q = LM_query(query)
         scoreMLE = Laplace_smooth(LM_d, bigram_q)
         tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
-        ranking_Laplace.append(tmpLaplace)
         doc_rel_Lap = getIndexRelDoc(tmpLaplace)
         dicLapl[(n, tuple(tmpLaplace))] = doc_rel_Lap
         #Interpolation Smoothing
@@ -670,5 +667,20 @@ def optimals_parameters():
 
 
 index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters()
-idxx = getIndexRelDoc(list(newRanking))
-print(idxx)
+tokens = text_to_word_sequence(query)
+newRanking = list(newRanking)
+relevant_documents = []
+for i in range(0, index+1):
+    relevant_documents.append(([newRanking[i][0]],newRanking[i][1]))
+thr_new = newRanking[index][1]
+LM_d, remaining_doc = getLM_docs(ngram, relevant_documents, thr_new)
+
+#numero di occorrenze termini della query nei LMs dei documenti rilevanti
+for key, v in LM_d.items():
+    print("###########################")
+    for token in tokens:
+        for word, count in v[token].items():
+            print(token, " ", word, ": ", count)
+
+
+#Co_-Occurence method
