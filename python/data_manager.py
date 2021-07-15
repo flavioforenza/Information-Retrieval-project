@@ -190,10 +190,12 @@ def rnd_query():
     query = ""
     print("Looking for a query...")
     while not category:
-        rnd = random.randint(0, len(data))
+        #rnd = random.randint(0, len(data))
         #rnd = 48566
         #rnd = 29560
-        #rnd = 10
+        rnd = 11
+        #rnd = 37384
+        #rnd = 37384
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -228,12 +230,11 @@ doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexD
 
 #get the weight as threshold
 threshold = [v for k,v in doc_score if k == id_doc]
-print("Threshold: ", threshold)
+print("Threshold/Score document: ", threshold)
 
 for (id,w) in doc_score:
     if id == id_doc:
         print("Index with TFIDF: ", doc_score.index((id,w)))
-        print("Score document: ", w)
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
@@ -247,7 +248,7 @@ def search_DocCategories(thr):
         pbar.write("Search categories with Scrape-Schema-Recipe")
         for doc_id, score in doc_score:
             increment_bar +=1
-            if score>thr:
+            if score>=thr:
                 row = (data.loc[data['id'] == doc_id[0]])
                 url = row['url'].values
                 catCook = getEntity_scrape([url[0]])
@@ -264,7 +265,7 @@ def search_DocCategories(thr):
 
 #docCat , docCat_some_empty= search_DocCategories(threshold[0])
 
-relevant = [k[0] for k, i in doc_score if i > threshold]
+relevant = [k[0] for k, i in doc_score if i >= threshold]
 docCat_some_empty = data[data['id'].isin(relevant)]
 docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
 
@@ -312,7 +313,7 @@ def plot(precision, recall, title):
 
 def getPred(estimate, title, lstDoc, queryCat):
     y_pred = getCatCorrispondece(queryCat, list(lstDoc['Scrape'].values), estimate)
-    d_score = [w for id, w in doc_score if w > threshold and lstDoc['id'].isin(id).any().any()]
+    d_score = [w for id, w in doc_score if w >= threshold and lstDoc['id'].isin(id).any().any()]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
@@ -416,11 +417,11 @@ SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 '''
 doc_USDAEntity = {}
 def only_USDA():
-    with tqdm(total=sum(i > threshold for k,i in doc_score), file=sys.stdout) as pbar:
+    with tqdm(total=sum(i >= threshold for k,i in doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
         for doc_id, score in doc_score:
             #print("Entity search: document #", doc_id[0])
-            if score > threshold:
+            if score >= threshold:
                 row = (data.loc[data['id'] == doc_id[0]])
                 ingredients = row['ingredients'].values
                 entities = get_entities_USDA(ingredients[0])
@@ -439,7 +440,7 @@ def plot_only_USDA():
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
     y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(docCat_some_empty['USDA'].values), 0)
     #y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
-    d_score = [i for k,i in doc_score if i>threshold]
+    d_score = [i for k,i in doc_score if i>=threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
     #plot(precision, recall, title)
@@ -455,24 +456,14 @@ print("Avg only USDA: ", avgP)
 PCA
 '''
 
-def showPCA(query, doc_score):
-    with open('id_instructions.pkl', 'rb') as f:
-        id_instr = pickle.load(f)
-
-    all_relevant_documents = []
-    for doc_id, score in doc_score:
-        if score > threshold:
-            all_relevant_documents.append(id_instr[doc_id[0]])
-
+def showPCA(query, all_relevant_documents):
     #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
     vectorizer = TfidfVectorizer(tokenizer=text_to_word_sequence)
     documents = vectorizer.fit_transform(all_relevant_documents)
     qr = vectorizer.transform([query])
-
     pca = PCA(n_components=2)
     v_docs = pca.fit_transform(documents.toarray())
     v_query = pca.transform(qr.toarray())
-
     #prendi le entità di tutti i documenti ed enumerali
     plt.scatter(v_docs[:, 0], v_docs[:, 1], edgecolor='none', alpha=0.5,
                 cmap=plt.cm.get_cmap('Accent', 10), label = 'Documents')
@@ -483,16 +474,19 @@ def showPCA(query, doc_score):
     #plt.savefig('imgs/'+folder+'PCA')
     plt.show()
 
-#attivare questo
-showPCA(query, doc_score)
+with open('id_instructions.pkl', 'rb') as f:
+    id_instr = pickle.load(f)
+all_relevant_documents = []
+for doc_id, score in doc_score:
+    if score >= threshold:
+        all_relevant_documents.append(id_instr[doc_id[0]])
+if len(all_relevant_documents)>1:
+    showPCA(query, all_relevant_documents)
 
 ''''
 LANGUAGE MODEL
 1. Infer a LM for each document (PAG. 224)
 '''
-
-with open('id_instructions.pkl', 'rb') as f:
-    id_instr = pickle.load(f)
 
 # k-grams (s_min=2)
 def skip(sequence, s=2):
@@ -636,7 +630,6 @@ def optimals_parameters():
             lambda2 = 1 - k
             if lambda2==0:
                 break
-        best = 0
         minimum = min(results.items(), key=lambda x:x[1])
         dicInterp[n] = minimum
     index = len(data)+1
@@ -668,6 +661,7 @@ def optimals_parameters():
     if smoothing == 'Interpolation':
         print("Lambda1: ", l1)
         print("Lambda2: ", l2)
+    return index, smoothing, ngram, l1, l2
 
 
-optimals_parameters()
+index, smoothing, ngram, lmb1, lmb2 = optimals_parameters()
