@@ -1,35 +1,29 @@
-import statistics
 import sys
-import string
-import nltk
-import spacy
-import pymongo
-import matplotlib.pyplot as plt
-import pandas as pd
-import seaborn as sns
-import numpy as np
 import pickle
-import scrape_schema_recipe as scr
-import random
+import string
+import sys
+from collections import defaultdict
+
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import pymongo
 import requests
-import json
-import os
-from gensim.utils import tokenize
+import scrape_schema_recipe as scr
+import seaborn as sns
+import spacy
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
-from collections import defaultdict, OrderedDict
-from tqdm import tqdm
-from collections import defaultdict
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.decomposition import PCA
-from nltk.tokenize import word_tokenize
-from nltk.tokenize import sent_tokenize
-from sklearn.metrics import precision_recall_curve
-from usda.client import UsdaClient
+from gensim.utils import tokenize
 from keras.preprocessing.text import text_to_word_sequence
+from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
-
+from sklearn.decomposition import PCA
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics import precision_recall_curve
+from sklearn.metrics.pairwise import cosine_similarity
+from tqdm import tqdm
+from usda.client import UsdaClient
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
@@ -665,7 +659,7 @@ def optimals_parameters():
         print("Lambda2: ", l2)
     return index, smoothing, ngram, l1, l2, ranking
 
-#Co_-Occurrence method
+#Co-Occurrence method
 index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters()
 tokens = text_to_word_sequence(query)
 newRanking = list(newRanking)
@@ -676,25 +670,67 @@ thr_new = newRanking[index][1]
 LM_d, remaining_doc = getLM_docs(ngram, relevant_documents, thr_new)
 
 LM_coll = getLM_coll(ngram, relevant_documents, thr_new)
-other_words = {k: [] for k in tokens}
-for token in tokens:
-     for word, count in LM_coll[token].items():
-        other_words[token].append((word,count))
-        print(token, " ", word, ": ", count)
-
 result = {k: [] for k in tokens}
-for qtok in tokens:
-    max_value = max(other_words[qtok], key=lambda x:x[1])
-    remaining = [(word, count) for (word, count)  in other_words[qtok] if count==max_value[1]]
-    result[qtok].append([i for i in remaining])
+for token in tokens:
+    other_words = {token:[]}
+    for word, count in LM_coll[token].items():
+        other_words[token].append((word,count))
+        #print(token, " ", word, ": ", count)
+    max_value = max(other_words[token], key=lambda x: x[1])
+    remaining = [(word, count) for (word, count) in other_words[token] if count==max_value[1]]
+    result[token].append([word for (word,count) in remaining])
 
-for k,v in result.items():
-    print(k)
-    for i in v:
+#query expansion
+query_expansion = []
+tmp_query = []
+for token, word_exp in result.items():
+    for i in word_exp:
         if len(i)==1:
-            print(i[0][0])
+            new_query = token + " " + i[0]
+            tmp_query.append(new_query)
         else:
-            for tup in i:
-                print(tup[0])
+            for k in i:
+                new_query = token + " " + k
+                tmp_query.append(new_query)
+
+some_queries = []
+final_query = ""
+#contiene le restanti parole da unire a una parola nella query
+lst_other = []
+for strings in tmp_query:
+    if strings.split()[0] not in final_query:
+        if final_query=="":
+            final_query += strings
+        else:
+            final_query += " " + strings
+    else:
+        lst_other.append(strings)
+some_queries.append(final_query)
+
+for oth in lst_other:
+    len_some = len(some_queries)
+    while len_some!=0:
+        tmp = text_to_word_sequence(some_queries[len_some-1])
+        strings = text_to_word_sequence(oth)
+        if strings[0] in tmp:
+            tmp[tmp.index(strings[0])+1] = strings[1]
+            new_query = ""
+            for i in tmp:
+                if new_query == "": #remove initial space
+                    new_query += i
+                    final_query = new_query
+                else:
+                    new_query += " " + i
+                    final_query = new_query
+            some_queries.append(new_query)
+            len_some -= 1
+
+for i in some_queries:
+    print(i)
+
+
+
+
+
 
 
