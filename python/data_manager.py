@@ -3,7 +3,7 @@ import pickle
 import string
 import sys
 from collections import defaultdict
-
+import random
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -186,10 +186,13 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
+        #rnd = 34582 #Interpolation
         #rnd = 11
         #rnd = 37384
         #rnd = 16068
+        #rnd = 13037
+        #rnd = 39800
+        rnd = 12800 #e
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -210,7 +213,6 @@ print("Query:", query)
 print("Query idx: ", idx_q)
 print("Categories query: ", queryCat)
 print("Id Doc: ", id_doc)
-
 
 '''
 COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
@@ -598,14 +600,13 @@ def getIndexRelDoc(tmp):
             doc_rel = tmp.index((id,w))
     return doc_rel
 
-def optimals_parameters():
+def optimals_parameters(bigram_q):
     dicLapl = {}
     dicInterp = {}
     for n in range(2 , 11, 1):
         LM_coll = getLM_coll(n)
         LM_d, remaining_doc = getLM_docs(n)
         #Laplace smoothing
-        bigram_q = LM_query(query)
         scoreMLE = Laplace_smooth(LM_d, bigram_q)
         tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
         doc_rel_Lap = getIndexRelDoc(tmpLaplace)
@@ -659,50 +660,60 @@ def optimals_parameters():
         print("Lambda2: ", l2)
     return index, smoothing, ngram, l1, l2, ranking
 
+bigram_q = LM_query(query)
+index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
+
 #Co-Occurrence method
-index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters()
 tokens = text_to_word_sequence(query)
 newRanking = list(newRanking)
 relevant_documents = []
 for i in range(0, index+1):
     relevant_documents.append(([newRanking[i][0]],newRanking[i][1]))
 thr_new = newRanking[index][1]
-LM_d, remaining_doc = getLM_docs(ngram, relevant_documents, thr_new)
+#LM_d, remaining_doc = getLM_docs(2, relevant_documents, thr_new)
 
-LM_coll = getLM_coll(ngram, relevant_documents, thr_new)
+LM_coll = getLM_coll(2, relevant_documents, thr_new)
+#k: token_query, v: list of tokens that occurs
 result = {k: [] for k in tokens}
 for token in tokens:
-    other_words = {token:[]}
+    other_words = {token:[]} #può avere la lista vuota
     for word, count in LM_coll[token].items():
         other_words[token].append((word,count))
         #print(token, " ", word, ": ", count)
-    max_value = max(other_words[token], key=lambda x: x[1])
-    remaining = [(word, count) for (word, count) in other_words[token] if count==max_value[1]]
-    result[token].append([word for (word,count) in remaining])
+    #print("Len other_words: ", len(other_words[token]))
+    if len(other_words[token])>0:
+        max_value = max(other_words[token], key=lambda x: x[1])
+        remaining = [(word, count) for (word, count) in other_words[token] if count==max_value[1]]
+        #print("Len remaining: ", len(remaining))
+        result[token].append([word for (word,count) in remaining])
 
 #query expansion
-query_expansion = []
 tmp_query = []
 for token, word_exp in result.items():
-    for i in word_exp:
-        if len(i)==1:
-            new_query = token + " " + i[0]
-            tmp_query.append(new_query)
-        else:
-            for k in i:
-                new_query = token + " " + k
+    if len(word_exp)>0:
+        for i in word_exp:
+            if len(i)==1:
+                new_query = token + " " + i[0]
                 tmp_query.append(new_query)
+            elif len(i)>1:
+                for k in i:
+                    new_query = token + " " + k
+                    tmp_query.append(new_query)
+    else:
+        tmp_query.append(token)
 
 some_queries = []
 final_query = ""
 #contiene le restanti parole da unire a una parola nella query
 lst_other = []
 for strings in tmp_query:
-    if strings.split()[0] not in final_query:
-        if final_query=="":
-            final_query += strings
-        else:
-            final_query += " " + strings
+    words = word_tokenize(strings)
+    if words[0] not in final_query:
+        if words[1] not in ["#E", "#", "E"]:
+            if final_query=="":
+                final_query += strings
+            else:
+                final_query += " " + strings
     else:
         lst_other.append(strings)
 some_queries.append(final_query)
@@ -712,21 +723,67 @@ for oth in lst_other:
     while len_some!=0:
         tmp = text_to_word_sequence(some_queries[len_some-1])
         strings = text_to_word_sequence(oth)
+        #string[0] == token in query
         if strings[0] in tmp:
-            tmp[tmp.index(strings[0])+1] = strings[1]
-            new_query = ""
-            for i in tmp:
-                if new_query == "": #remove initial space
-                    new_query += i
-                    final_query = new_query
-                else:
-                    new_query += " " + i
-                    final_query = new_query
-            some_queries.append(new_query)
-            len_some -= 1
+            #check boundary
+            if tmp.index(strings[0]) == len(tmp)-1 or tmp[tmp.index(strings[0])+1] not in lst_other:
+                temp_list = []
+                new_query = ""
+                for i in tmp:
+                    temp_list.append(i)
+                    if i == tmp[tmp.index(strings[0])]:
+                        temp_list.append(strings[1])
+                for i in temp_list:
+                    if new_query == "":  # remove initial space
+                        new_query += i
+                        final_query = new_query
+                    else:
+                        new_query += " " + i
+                        final_query = new_query
+                some_queries.append(new_query)
+                len_some -= 1
+            else:
+                tmp[tmp.index(strings[0])+1] = strings[1]
+                new_query = ""
+                for i in tmp:
+                    if new_query == "":
+                        new_query += i
+                        final_query = new_query
+                    else:
+                        new_query += " " + i
+                        final_query = new_query
+                some_queries.append(new_query)
+                len_some -= 1
 
-for i in some_queries:
-    print(i)
+print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+print("Query generate: ", len(some_queries))
+print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+
+print("Instructions: ", id_instr[id_doc])
+
+def clean_query():
+    for q in some_queries:
+        tmpq = q
+        tkns = text_to_word_sequence(q)
+        for tkn in tkns:
+            if tkn in ['e', 'f', '#E', '#S' ]:
+                tmpq.replace(tkn, '')
+                some_queries[some_queries.index(q)] = tmpq
+            # if (tkns.count(tkn)>1):
+            #     indices = [i for i, x in enumerate(tkns) if x == tkn]
+            #     for i in indices:
+            #         if indices.index(i)>0:
+            #             del tkns[i]
+
+#clean_query()
+
+for q in some_queries:
+    if q != query:
+        print("##################################")
+        print("Query: ", q)
+        bigram_q = LM_query(q)
+        index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
+
 
 
 
