@@ -45,10 +45,19 @@ def spacy_tokenizer(text=None):
         tokens.append(token.text)
     return tokens
 
+def gensim_tokenizer(text=None):
+    if text == None:
+        return 0
+    tokens = []
+    doc = tokenize(text)
+    for token in doc:
+        tokens.append(token)
+    return tokens
+
 def tokenizer(token):
     switcher={
         'spacy': spacy_tokenizer,
-        'gensim': tokenize,
+        'gensim': gensim_tokenizer,
         'keras': text_to_word_sequence,
         'nltk': word_tokenize
     }
@@ -188,14 +197,14 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
+        #rnd = 34582 #Interpolation
         #rnd = 11
         #rnd = 37384
         #rnd = 16068
         #rnd = 13037
         #rnd = 39800
-        #rnd = 12800 #9-->0
-        #rnd = 10726
+        #rnd = 12800 #9-->0 duplicati
+        rnd = 10726
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -505,26 +514,23 @@ def getLM_docs(step, documents = doc_score, thr = threshold):
                 instructions = id_instr[doc[0]]
                 #tokenizer
                 tokens = principal_tokenizer(instructions)
-                if tokenizer_name == 'gensim':
-                    tmp = []
-                    tmp.append([i for i in tokens])
-                    tokens = tmp[0]
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM[a][b] += 1
             LMs_doc[doc[0]] = LM
     return LMs_doc, ranking_id
 
-# def getVoc_doc(id):
-#     instructions = id_instr[id]
-#     tokens = spacy_tokenizer(instructions)
-#     len_tokens = len(np.unique(tokens))
-#     return  len_tokens
-
 #len of vocabulary from all models
-l_singl = 23093
+def get_count_unique_word(LMs):
+    vocabulary = []
+    for key,v in LMs.items():
+        for token in v:
+            if token not in vocabulary:
+                vocabulary.append(token)
+    return len(vocabulary)
 
 def Laplace_smooth(LMs, bgrams):
+    l_singl = get_count_unique_word(LMs)
     bgr = list(bgrams)
     new_dict = {}
     for key,v in LMs.items():
@@ -539,6 +545,7 @@ def Laplace_smooth(LMs, bgrams):
 # Linear Interpolation Smoothing
 # P(w|d)=\lambdaP(q|Md)+(1-\lambda)P(q|Mc)
 def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
+    l_singl = get_count_unique_word(LMdocs)
     new_dict = {}
     for doc_id, LM in LMdocs.items():
         bigramDoc = []
@@ -590,10 +597,6 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
                 instructions = id_instr[doc[0]]
                 #tokenizer
                 tokens = principal_tokenizer(instructions)
-                if tokenizer_name == 'gensim':
-                    tmp = []
-                    tmp.append([i for i in tokens])
-                    tokens = tmp[0]
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM_coll[a][b] += 1
@@ -602,10 +605,6 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
 def LM_query(q):
     #tokenizer
     tokens = principal_tokenizer(q)
-    if tokenizer_name == 'gensim':
-        tmp = []
-        tmp.append([i for i in tokens])
-        tokens = tmp[0]
     tokens = ["#S"] + tokens + ["#E"]
     bigram = list(ngrams(tokens, 2))
     return bigram
@@ -684,10 +683,6 @@ index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
 #Co-Occurrence method
 #tokenizer
 tokens = principal_tokenizer(query)
-if tokenizer_name == 'gensim':
-    tmp = []
-    tmp.append([i for i in tokens])
-    tokens = tmp[0]
 newRanking = list(newRanking)
 relevant_documents = []
 for i in range(0, index+1):
@@ -732,10 +727,6 @@ lst_other = []
 for strings in tmp_query:
     #tokenizer
     words = principal_tokenizer(strings)
-    if tokenizer_name == 'gensim':
-        tmp = []
-        tmp.append([i for i in words])
-        words = tmp[0]
     if words[0] not in final_query:
         #se vi è una word in coppia
         if len(words)>1:
@@ -755,13 +746,6 @@ for oth in lst_other:
     while len_some!=0:
         tmp = principal_tokenizer(some_queries[len_some-1])
         strings = principal_tokenizer(oth)
-        if tokenizer_name == 'gensim':
-            tmp1 = []
-            tmp2 = []
-            tmp1.append([i for i in tmp])
-            tmp2.append([j for j in strings])
-            tmp = tmp1[0]
-            strings = tmp2[0]
         #string[0] == token in query
         if strings[0] in tmp:
             #check boundary
