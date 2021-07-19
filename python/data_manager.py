@@ -30,9 +30,32 @@ data = pd.read_pickle("./CustomRecipesFilter.pkl")
 data.index = range(0,len(data))
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
-#data = pd.read_pickle("./CustomRecipes.pkl")
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
+
+'''
+SWITCH TOKENIZERS
+'''
+def spacy_tokenizer(text=None):
+    if text == None:
+        return 0
+    tokens = []
+    doc = sp(text)
+    for token in doc:
+        tokens.append(token.text)
+    return tokens
+
+def tokenizer(token):
+    switcher={
+        'spacy': spacy_tokenizer,
+        'gensim': tokenize,
+        'keras': text_to_word_sequence,
+        'nltk': word_tokenize
+    }
+    return switcher.get(token, lambda:'Invalid tokenizer')
+
+tokenizer_name = 'keras'
+principal_tokenizer = tokenizer(tokenizer_name)
 
 '''
 PLOT STATISTICS OF DATASET
@@ -70,27 +93,6 @@ def plot_statistic(column):
     # plt.savefig('imgs/statistic' + column)
     # plt.show()
 
-'''
-SWITCH TOKENIZERS
-'''
-def spacy_tokenizer(text=None):
-    tokens = []
-    doc = sp(text)
-    for token in doc:
-        tokens.append(token.text)
-    return tokens
-
-
-def tokenizer(tokenizer, argument = None):
-    switcher={
-        'spacy': spacy_tokenizer(argument),
-        'gensim': tokenize(argument),
-        'keras': text_to_word_sequence(argument),
-        'nltk': word_tokenize(argument)
-    }
-    func = switcher.get(tokenizer, lambda:'Invalid tokenizer')
-    return func
-
 #drop stop_words, punctuation and apply lemmatization
 def clean_normalize(phrase):
     ts = [',', '.', ';', '(', ')', '?', '!', '&', '%', ':', '*', '"', '-']
@@ -114,7 +116,7 @@ def get_id_cleanTokens(columns):
     dic_id_col = {}
     with tqdm(total=len(data_col), file=sys.stdout) as pbar:
         for id, instr in data_col:
-            #contains alla arrays of each field in mogno
+            #contains alla arrays of each field in mongo
             list_col = []
             pbar.update(1)
             try:
@@ -131,15 +133,15 @@ def get_id_cleanTokens(columns):
         file.close()
     return dic_id_col
 
-#get_id_tokens(['id', 'title'])
-#get_id_tokens(['id', 'ingredients'])
-#get_id_tokens(['id', 'instructions'])
+#get_id_cleanTokens(['id', 'title'])
+#get_id_cleanTokens(['id', 'ingredients'])
+#get_id_cleanTokens(['id', 'instructions'])
 
 #COMPUTE THE COSINE SIMILARITY
 def ranking(query):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
-    vectorizer = TfidfVectorizer(tokenizer=text_to_word_sequence)
+    vectorizer = TfidfVectorizer(tokenizer=principal_tokenizer)
     docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query])
     #dict of relevant documents and scores
@@ -186,13 +188,14 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 34582 #Interpolation
+        rnd = 34582 #Interpolation
         #rnd = 11
         #rnd = 37384
         #rnd = 16068
         #rnd = 13037
         #rnd = 39800
-        rnd = 12800 #e
+        #rnd = 12800 #9-->0
+        #rnd = 10726
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -453,7 +456,7 @@ PCA
 
 def showPCA(query, all_relevant_documents):
     #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
-    vectorizer = TfidfVectorizer(tokenizer=text_to_word_sequence)
+    vectorizer = TfidfVectorizer(tokenizer=principal_tokenizer)
     documents = vectorizer.fit_transform(all_relevant_documents)
     qr = vectorizer.transform([query])
     pca = PCA(n_components=2)
@@ -500,18 +503,23 @@ def getLM_docs(step, documents = doc_score, thr = threshold):
             ranking_id.append(doc)
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
-                tokens = text_to_word_sequence(instructions)
+                #tokenizer
+                tokens = principal_tokenizer(instructions)
+                if tokenizer_name == 'gensim':
+                    tmp = []
+                    tmp.append([i for i in tokens])
+                    tokens = tmp[0]
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM[a][b] += 1
             LMs_doc[doc[0]] = LM
     return LMs_doc, ranking_id
 
-def getVoc_doc(id):
-    instructions = id_instr[id]
-    tokens = spacy_tokenizer(instructions)
-    len_tokens = len(np.unique(tokens))
-    return  len_tokens
+# def getVoc_doc(id):
+#     instructions = id_instr[id]
+#     tokens = spacy_tokenizer(instructions)
+#     len_tokens = len(np.unique(tokens))
+#     return  len_tokens
 
 #len of vocabulary from all models
 l_singl = 23093
@@ -580,14 +588,24 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
         if score>=thr:
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
-                tokens = text_to_word_sequence(instructions)
+                #tokenizer
+                tokens = principal_tokenizer(instructions)
+                if tokenizer_name == 'gensim':
+                    tmp = []
+                    tmp.append([i for i in tokens])
+                    tokens = tmp[0]
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM_coll[a][b] += 1
     return LM_coll
 
 def LM_query(q):
-    tokens = text_to_word_sequence(q)
+    #tokenizer
+    tokens = principal_tokenizer(q)
+    if tokenizer_name == 'gensim':
+        tmp = []
+        tmp.append([i for i in tokens])
+        tokens = tmp[0]
     tokens = ["#S"] + tokens + ["#E"]
     bigram = list(ngrams(tokens, 2))
     return bigram
@@ -664,7 +682,12 @@ bigram_q = LM_query(query)
 index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
 
 #Co-Occurrence method
-tokens = text_to_word_sequence(query)
+#tokenizer
+tokens = principal_tokenizer(query)
+if tokenizer_name == 'gensim':
+    tmp = []
+    tmp.append([i for i in tokens])
+    tokens = tmp[0]
 newRanking = list(newRanking)
 relevant_documents = []
 for i in range(0, index+1):
@@ -707,13 +730,22 @@ final_query = ""
 #contiene le restanti parole da unire a una parola nella query
 lst_other = []
 for strings in tmp_query:
-    words = word_tokenize(strings)
+    #tokenizer
+    words = principal_tokenizer(strings)
+    if tokenizer_name == 'gensim':
+        tmp = []
+        tmp.append([i for i in words])
+        words = tmp[0]
     if words[0] not in final_query:
-        if words[1] not in ["#E", "#", "E"]:
-            if final_query=="":
-                final_query += strings
-            else:
-                final_query += " " + strings
+        #se vi è una word in coppia
+        if len(words)>1:
+            if words[1] not in ["#E", "#", "E"]:
+                if final_query=="":
+                    final_query += strings
+                else:
+                    final_query += " " + strings
+        else:
+            final_query += " " + strings
     else:
         lst_other.append(strings)
 some_queries.append(final_query)
@@ -721,8 +753,15 @@ some_queries.append(final_query)
 for oth in lst_other:
     len_some = len(some_queries)
     while len_some!=0:
-        tmp = text_to_word_sequence(some_queries[len_some-1])
-        strings = text_to_word_sequence(oth)
+        tmp = principal_tokenizer(some_queries[len_some-1])
+        strings = principal_tokenizer(oth)
+        if tokenizer_name == 'gensim':
+            tmp1 = []
+            tmp2 = []
+            tmp1.append([i for i in tmp])
+            tmp2.append([j for j in strings])
+            tmp = tmp1[0]
+            strings = tmp2[0]
         #string[0] == token in query
         if strings[0] in tmp:
             #check boundary
@@ -778,7 +817,8 @@ def clean_query():
 #clean_query()
 
 for q in some_queries:
-    if q != query:
+    #switching tokenizer is possibile to find white space in query
+    if q.find(query)==-1:
         print("##################################")
         print("Query: ", q)
         bigram_q = LM_query(q)
