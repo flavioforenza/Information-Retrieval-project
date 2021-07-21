@@ -680,6 +680,7 @@ def optimals_parameters(bigram_q):
 bigram_q = LM_query(query)
 index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
 
+print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
 #Co-Occurrence method
 tokens = principal_tokenizer(query)
 newRanking = list(newRanking)
@@ -693,22 +694,47 @@ LM_coll = getLM_coll(2, relevant_documents, thr_new)
 #create term-term dataframe
 # rows = terms of queries
 # columns =terms of relevant documents
-
-term_term = pd.DataFrame(columns=[word for word,count in LM_coll.items()], index=tokens)
-#fill dataframe
+row_col = [word for word,count in LM_coll.items() if word not in ["#E", "#S"]]
 for token in tokens:
+    if token not in row_col and token not in ["#E", "#S"]:
+        row_col.append(token)
+
+term_term = pd.DataFrame(columns=row_col, index=row_col)
+
+#fill dataframe
+for token in row_col:
     for word, count in LM_coll[token].items():
-        #term_term.loc[term_term.index[token], word] = count
-        term_term.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(word)] = count
+        if word not in ["#E", "#S"]:
+            term_term.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(word)] = count
+
 
 #add sum to dataframe of each columns
-#term_term.set_index("Count(context)", inplace=True)
 term_term = term_term.fillna(0)
 sumCol = term_term.sum(axis=0)
-term_term.loc["Count(context)"] = term_term.sum(axis=0)
+term_term.loc["count(context)"] = term_term.sum(axis=0)
 term_term["count(w)"] = term_term.sum(axis=1)
+max_value = term_term["count(w)"].max()
 
-#PPMI
+print("Instructions: ", id_instr[id_doc])
+
+#create a equal dataframe to term_temr with PPMI values
+pmi_matrix = pd.DataFrame(columns= row_col, index=row_col)
+for token in row_col:
+    for context, count in LM_coll.items():
+        if context not in ["#E", "#S"]:
+            #print("Row: ", token, " Column: ", context)
+            if term_term.iloc[term_term.index.get_loc(token)][context] != 0:
+                p_wc = term_term.iloc[term_term.index.get_loc(token)][context]/max_value
+                if term_term.iloc[term_term.index.get_loc(token)]["count(w)"] != 0:
+                    p_w = term_term.iloc[term_term.index.get_loc(token)]["count(w)"]/max_value
+                if term_term.iloc[term_term.index.get_loc("count(context)")][context] != 0:
+                    p_c = term_term.iloc[term_term.index.get_loc("count(context)")][context]/max_value
+                ppmi_value = max(np.log2(p_wc/(p_w*p_c)), 0)
+                pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = ppmi_value
+            else:
+                pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
+
+print("OK")
 
 
 
