@@ -734,6 +734,26 @@ for token in row_col:
             else:
                 pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
 
+#data.loc[data['id'] == doc_id[0]]
+vector_tokens_query = {k: [] for k in tokens}
+for token in tokens:
+    for column in pmi_matrix.columns:
+        if column != token:
+            score_similarity = cosine_similarity(np.matrix(pmi_matrix[token].tolist()),
+                                                 np.matrix(pmi_matrix[column].tolist()))[0]
+            vector_tokens_query[token].append((column, score_similarity[0]))
+
+#order each word for each token in query
+
+
+
+
+
+for token in tokens:
+    for col in pmi_matrix.columns:
+        if token == col:
+            print(token)
+similarity = cosine_similarity(np.matrix(pmi_matrix['apple'].tolist()), np.matrix(pmi_matrix['pie'].tolist()))
 print("OK")
 
 
