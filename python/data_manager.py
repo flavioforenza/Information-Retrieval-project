@@ -745,9 +745,30 @@ for token in tokens:
 
 #order each word for each token in query
 dict_sorted = {k: [] for k in tokens}
-for k,v in dict_sorted.items():
-    for key, value in vector_tokens_query.items():
-        dict_sorted[k].append(sorted(value, key=lambda x:-x[-1]))
+for key, value in vector_tokens_query.items():
+    dict_sorted[key].append(sorted(value, key=lambda x:-x[-1]))
+
+#creare una lista di query. Partire dalla query originale ed effettuare delle combinazioni con le parole occorrenti
+all_query = {k: [] for k in tokens}
+for token, list_words in dict_sorted.items():
+    for (word, score) in list_words[0]:
+        if score>0:
+            support = []
+            support = tokens.copy()
+            if word not in support:
+                idx = support.index(token)
+                support.insert(idx+1, word)
+                new_query = ' '.join(support)
+                all_query[token].append(new_query)
+
+#interpolare tutte le combinazioni di query ottenute da ogni token di codesta
+# for k in range(1,len(all_query.keys())):
+#     value = all_query[k]
+#     for tupl in value:
+
+
+
+print(all_query)
 
 
 
