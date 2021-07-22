@@ -744,17 +744,11 @@ for token in tokens:
             vector_tokens_query[token].append((column, score_similarity[0]))
 
 #order each word for each token in query
+dict_sorted = {k: [] for k in tokens}
+for k,v in dict_sorted.items():
+    for key, value in vector_tokens_query.items():
+        dict_sorted[k].append(sorted(value, key=lambda x:-x[-1]))
 
-
-
-
-
-for token in tokens:
-    for col in pmi_matrix.columns:
-        if token == col:
-            print(token)
-similarity = cosine_similarity(np.matrix(pmi_matrix['apple'].tolist()), np.matrix(pmi_matrix['pie'].tolist()))
-print("OK")
 
 
 
