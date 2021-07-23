@@ -762,13 +762,34 @@ for token, list_words in dict_sorted.items():
                 all_query[token].append(new_query)
 
 #interpolare tutte le combinazioni di query ottenute da ogni token di codesta
-# for k in range(1,len(all_query.keys())):
-#     value = all_query[k]
-#     for tupl in value:
+#la prima lista può essere vuota!!
 
+idx = 0
+first_queries = all_query[tokens[idx]].copy()
+while not first_queries:
+    idx+=1
+    first_queries = all_query[tokens[idx]]
 
+for i in range (idx+1, len(all_query.keys())):
+    #copia delle prime query
+    temp = first_queries.copy() #lista di stringhe
+    tq_w = dict_sorted[tokens[i]] #next token words
+    if not tq_w:
+        break
+    for single_query in temp:
+        #tokenizzo la single_query
+        tks_query = principal_tokenizer(single_query)
+        #t = co-occurrence word, w: weight
+        for (t,w) in tq_w[0]:
+            if w>0:
+                query_copy = tks_query.copy()
+                idx = query_copy.index(tokens[i])
+                query_copy.insert(idx+1,t)
+                new_query = ' '.join(query_copy)
+                first_queries.append(new_query)
 
-print(all_query)
+for q in first_queries:
+    print(q)
 
 
 
