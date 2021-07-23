@@ -197,8 +197,8 @@ def rnd_query():
     while not category:
         # = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
-        #rnd = 11
+        #rnd = 34582 #Interpolation
+        rnd = 11
         #rnd = 37384
         #rnd = 16068
         #rnd = 13037
@@ -734,6 +734,36 @@ for token in row_col:
             else:
                 pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
 
+
+
+
+#SVD/LSI for matrix factorization
+matrix_tmp = np.matrix(pmi_matrix, dtype=float)
+U, S, Vt = np.linalg.svd(matrix_tmp)
+
+S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
+np.fill_diagonal(S2, S)
+U_S= np.dot(U,S2)
+S_Vt = np.dot(S2, Vt)
+
+idxs = [pmi_matrix.index.get_loc(token) for token in tokens]
+
+df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
+
+vector_tokens_query = {k: [] for k in tokens}
+for token in tokens:
+    for column in pmi_matrix.columns:
+        if column != token:
+            score_similarity = cosine_similarity(np.matrix(pmi_matrix[token].tolist()),
+                                                 np.matrix(pmi_matrix[column].tolist()))[0]
+            vector_tokens_query[token].append((column, score_similarity[0]))
+
+
+
+
+
+
+
 #data.loc[data['id'] == doc_id[0]]
 vector_tokens_query = {k: [] for k in tokens}
 for token in tokens:
@@ -774,7 +804,7 @@ for i in range (idx+1, len(all_query.keys())):
     #copia delle prime query
     temp = first_queries.copy() #lista di stringhe
     tq_w = dict_sorted[tokens[i]] #next token words
-    if not tq_w:
+    if not tq_w[0]:
         break
     for single_query in temp:
         #tokenizzo la single_query
