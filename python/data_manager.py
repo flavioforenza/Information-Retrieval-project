@@ -767,17 +767,24 @@ for key, value in vector_tokens_query.items():
     dict_sorted[key].append(sorted(value, key=lambda x:-x[-1]))
 
 #creare una lista di query. Partire dalla query originale ed effettuare delle combinazioni con le parole occorrenti
+dict_sorted_update = {k: [] for k in tokens}
 all_query = {k: [] for k in tokens}
 for token, list_words in dict_sorted.items():
+    count = 0 #to select the k=10 top words
     for (word, score) in list_words[0]:
-        if score>0:
-            support = []
-            support = tokens.copy()
-            if word not in support:
-                idx = support.index(token)
-                support.insert(idx+1, word)
-                new_query = ' '.join(support)
-                all_query[token].append(new_query)
+        if count <10:
+            if score>0:
+                support = []
+                support = tokens.copy()
+                if word not in support:
+                    dict_sorted_update[token].append((word,score))
+                    idx = support.index(token)
+                    support.insert(idx+1, word)
+                    new_query = ' '.join(support)
+                    all_query[token].append(new_query)
+                    count+=1
+        else:
+            break
 
 for k,v in all_query.items():
     print(len(value))
@@ -791,25 +798,35 @@ while not first_queries:
     idx+=1
     first_queries = all_query[tokens[idx]]
 
+final_queries = []
+tmp_list_queries = []
 for i in range (idx+1, len(all_query.keys())):
     #copia delle prime query
-    temp = first_queries.copy() #lista di stringhe
-    tq_w = dict_sorted[tokens[i]] #next token words
-    if not tq_w[0]:
+    if not tmp_list_queries:
+        temp = first_queries.copy() #lista di stringhe
+    else:
+        temp = tmp_list_queries.copy()
+    if len(dict_sorted_update[tokens[i]])>=10:
+        tq_w = dict_sorted_update[tokens[i]][:10].copy() #next token words
+    else:
+        tq_w = dict_sorted_update[tokens[i]].copy()
+    if not tq_w:
         break
     for single_query in temp:
         #tokenizzo la single_query
         tks_query = principal_tokenizer(single_query)
         #t = co-occurrence word, w: weight
-        for (t,w) in tq_w[0]:
+        for (t,w) in tq_w:
             if w>0:
-                query_copy = tks_query.copy()
+                query_copy = tks_query.copy() #10
                 idx = query_copy.index(tokens[i])
                 query_copy.insert(idx+1,t)
                 new_query = ' '.join(query_copy)
-                first_queries.append(new_query)
+                tmp_list_queries.append(new_query)
+                if i == len(all_query.keys())-1:
+                    final_queries.append(new_query)
 
-for q in first_queries:
+for q in final_queries:
     print(q)
 
 
@@ -829,12 +846,6 @@ for q in first_queries:
 #         remaining = [(word, count) for (word, count) in other_words[token] if count==max_value[1]]
 #         #print("Len remaining: ", len(remaining))
 #         result[token].append([word for (word,count) in remaining])
-
-
-
-
-
-
 
 # #query expansion
 # tmp_query = []
