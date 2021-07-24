@@ -1,3 +1,4 @@
+import math
 import sys
 import pickle
 import string
@@ -197,8 +198,8 @@ def rnd_query():
     while not category:
         # = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 34582 #Interpolation
-        rnd = 11
+        rnd = 34582 #Interpolation
+        #rnd = 11
         #rnd = 37384
         #rnd = 16068
         #rnd = 13037
@@ -734,11 +735,9 @@ for token in row_col:
             else:
                 pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
 
-
-
-
 #SVD/LSI for matrix factorization
 matrix_tmp = np.matrix(pmi_matrix, dtype=float)
+sparsity_with_PPMI = 1-(np.count_nonzero(matrix_tmp)/matrix_tmp.size)
 U, S, Vt = np.linalg.svd(matrix_tmp)
 
 S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
@@ -746,31 +745,20 @@ np.fill_diagonal(S2, S)
 U_S= np.dot(U,S2)
 S_Vt = np.dot(S2, Vt)
 
+sparsity_with_SVD = 1-(np.count_nonzero(S_Vt)/S_Vt.size)
+
 idxs = [pmi_matrix.index.get_loc(token) for token in tokens]
 
+df_U_S = pd.DataFrame(np.array(U_S), columns= row_col, index=row_col)
 df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
 
+#get the query rows from df_S_Vt
 vector_tokens_query = {k: [] for k in tokens}
 for token in tokens:
-    for column in pmi_matrix.columns:
+    for column in df_U_S.columns:
         if column != token:
-            score_similarity = cosine_similarity(np.matrix(pmi_matrix[token].tolist()),
-                                                 np.matrix(pmi_matrix[column].tolist()))[0]
-            vector_tokens_query[token].append((column, score_similarity[0]))
-
-
-
-
-
-
-
-#data.loc[data['id'] == doc_id[0]]
-vector_tokens_query = {k: [] for k in tokens}
-for token in tokens:
-    for column in pmi_matrix.columns:
-        if column != token:
-            score_similarity = cosine_similarity(np.matrix(pmi_matrix[token].tolist()),
-                                                 np.matrix(pmi_matrix[column].tolist()))[0]
+            score_similarity = cosine_similarity(np.matrix(df_S_Vt[token].tolist()),
+                                                 np.matrix(df_U_S[column].tolist()))[0]
             vector_tokens_query[token].append((column, score_similarity[0]))
 
 #order each word for each token in query
@@ -790,6 +778,9 @@ for token, list_words in dict_sorted.items():
                 support.insert(idx+1, word)
                 new_query = ' '.join(support)
                 all_query[token].append(new_query)
+
+for k,v in all_query.items():
+    print(len(value))
 
 #interpolare tutte le combinazioni di query ottenute da ogni token di codesta
 #la prima lista può essere vuota!!
