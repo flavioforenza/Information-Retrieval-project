@@ -789,9 +789,6 @@ for token, list_words in dict_sorted.items():
 for k,v in all_query.items():
     print(len(value))
 
-#interpolare tutte le combinazioni di query ottenute da ogni token di codesta
-#la prima lista può essere vuota!!
-
 idx = 0
 first_queries = all_query[tokens[idx]].copy()
 while not first_queries:
@@ -803,11 +800,11 @@ tmp_list_queries = []
 for i in range (idx+1, len(all_query.keys())):
     #copia delle prime query
     if not tmp_list_queries:
-        temp = first_queries.copy() #lista di stringhe
+        temp = first_queries.copy()
     else:
         temp = tmp_list_queries.copy()
     if len(dict_sorted_update[tokens[i]])>=10:
-        tq_w = dict_sorted_update[tokens[i]][:10].copy() #next token words
+        tq_w = dict_sorted_update[tokens[i]][:10].copy()
     else:
         tq_w = dict_sorted_update[tokens[i]].copy()
     if not tq_w:
@@ -827,7 +824,8 @@ for i in range (idx+1, len(all_query.keys())):
                     final_queries.append(new_query)
 
 for q in final_queries:
-    print(q)
+    bigram_q = LM_query(q)
+    index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
 
 
 
