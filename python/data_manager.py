@@ -198,8 +198,8 @@ def rnd_query():
     while not category:
         # = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
-        #rnd = 11
+        #rnd = 34582 #Interpolation
+        rnd = 11
         #rnd = 37384
         #rnd = 16068
         #rnd = 13037
@@ -621,49 +621,49 @@ def getIndexRelDoc(tmp):
 def optimals_parameters(bigram_q):
     dicLapl = {k: [] for k in range(0,len(bigram_q))}
     dicInterp = {k: [] for k in range(0,len(bigram_q))}
-    for n in range(2 , 11, 1):
-        LM_coll = getLM_coll(n)
-        LM_d, remaining_doc = getLM_docs(n)
+    with tqdm(total=len(bigram_q), file=sys.stdout) as pbar:
+        pbar.write("Finding optimal parameters for queries...")
+        for n in range(2 , 11, 1):
+            LM_coll = getLM_coll(n)
+            LM_d, remaining_doc = getLM_docs(n)
+            #LAPLACE SMOOTHING
+            for single_query in bigram_q: #aggiungere il tqdm!!!!!!!!!!!!!!!!!!!!
+                scoreMLE = Laplace_smooth(LM_d, single_query)
+                tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
+                doc_rel_Lap = getIndexRelDoc(tmpLaplace)
+                dict_lapl_value = {}
+                dict_lapl_value[(n, tuple(tmpLaplace))] = doc_rel_Lap
+                dicLapl[bigram_q.index(single_query)].append(dict_lapl_value)
 
-        #LAPLACE SMOOTHING
-        for single_query in bigram_q:
-            scoreMLE = Laplace_smooth(LM_d, single_query)
-            tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
-            doc_rel_Lap = getIndexRelDoc(tmpLaplace)
-            dict_lapl_value = {}
-            dict_lapl_value[(n, tuple(tmpLaplace))] = doc_rel_Lap
-            dicLapl[bigram_q.index(single_query)].append(dict_lapl_value)
-
-            #INTERPOLATION SMOOTHING
-            lambda1 = 0
-            lambda2 = 1
-            results = {}
-            for k in np.arange(0.1, 1.1, 0.1):
-                scoreDc = LinInterp_Smooth(LM_d, single_query, lambda1, lambda2, LM_coll)
-                tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
-                doc_rel_Int = getIndexRelDoc(tmpInterp)
-                results[(lambda1, lambda2, tuple(tmpInterp))] = doc_rel_Int
-                lambda1 = 0 + k
-                lambda2 = 1 - k
-                if lambda2==0:
-                    break
-            minimum = min(results.items(), key=lambda x:x[1])
-            dict_interp_value={}
-            dict_interp_value[n] = minimum
-            dicInterp[bigram_q.index(single_query)].append(dict_interp_value)
-    #lavorare qui
+                #INTERPOLATION SMOOTHING
+                lambda1 = 0
+                lambda2 = 1
+                results = {}
+                for k in np.arange(0.1, 1.1, 0.1):
+                    scoreDc = LinInterp_Smooth(LM_d, single_query, lambda1, lambda2, LM_coll)
+                    tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
+                    doc_rel_Int = getIndexRelDoc(tmpInterp)
+                    results[(lambda1, lambda2, tuple(tmpInterp))] = doc_rel_Int
+                    lambda1 = 0 + k
+                    lambda2 = 1 - k
+                    if lambda2==0:
+                        break
+                minimum = min(results.items(), key=lambda x:x[1])
+                dict_interp_value={}
+                dict_interp_value[n] = minimum
+                dicInterp[bigram_q.index(single_query)].append(dict_interp_value)
+                pbar.update(1)
     ranking = []
     index = len(data)+1
     smoothing = ""
     ngram = 0
     l1 = 0
     l2 = 0
-    index_doc_q = 0
-
+    dit_ret = {k: [] for k in range(0,len(bigram_q))}
     for i in range(0, len(bigram_q)):
         q_lapl = dicLapl[i] #lista
         values_lapl = [list(element.values()) for element in q_lapl]
-        min_value_lapl = min(values_lapl)[0] #rimuovere lo zero per capire l'indice da prendere da values lapl
+        min_value_lapl = min(values_lapl)[0]
 
         q_interp = dicInterp[i]
         values_interp = [list(element.values()) for element in q_interp]
@@ -674,50 +674,45 @@ def optimals_parameters(bigram_q):
             if index<min_value_lapl:
                 break
             else:
+                smoothing = "Laplacian"
                 index = min_value_lapl
+                ngram = list(q_lapl[values_lapl.index([min_value_lapl])].keys())[0][0]
+                ranking = list(q_lapl[values_lapl.index([min_value_lapl])].keys())[0][1]
+                dit_ret[i] = (smoothing, index, ngram, ranking)
         else:
             if index<min_value_interp:
                 break
             else:
+                smoothing = 'Interpolation'
                 index = min_value_interp
                 ngram = list(q_interp[all_value_interp.index([min_value_interp])].keys())[0]
-
-    print("Indice min: ", index)
-
-
-
-    for (k1,ran) ,v1 in dicLapl[index_doc_q].values(): #dictionary from values
-        get_doc_weight = dicInterp[index_doc_q] #dictionary from values
-        for k2,v2 in get_doc_weight.items():
-            if v1 < v2[1]:
-                if index<v1:
-                    break
-                else:
-                    index = v1
-                    ngram = k1
-                    smoothing = 'Laplace'
-                    ranking = ran
-            else:
-                if index < v2[1]:
-                    break
-                else:
-                    index = v2[1]
-                    ngram = k2
-                    smoothing = 'Interpolation'
-                    l1 = v2[0][0]
-                    l2 = v2[0][1]
-                    ranking = v2[0][2]
-    index_doc_q += 1
+                l1 = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][0]
+                l2 = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][1]
+                ranking = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][2]
+                dit_ret[i] = (smoothing, index, ngram, l1, l2, ranking)
     print("Best smoothing: ", smoothing)
     print("Index result: ", index)
     print("N-gram: ", ngram)
     if smoothing == 'Interpolation':
         print("Lambda1: ", l1)
         print("Lambda2: ", l2)
-    return index, smoothing, ngram, l1, l2, ranking
+    return dit_ret
 
 bigram_q = LM_query(query)
-index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters([bigram_q])
+parameters = optimals_parameters([bigram_q])
+for k,v in parameters.items():
+    if v[0] == "Laplacian":
+        smoothing = v[0]
+        index = v[1]
+        ngram = v[2]
+        newRanking = v[3]
+    else:
+        smoothing = v[0]
+        index = v[1]
+        ngram = v[2]
+        l1 = v[3]
+        l2 = v[4]
+        newRanking = v[5]
 
 print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
 #Co-Occurrence method
@@ -745,7 +740,6 @@ for token in row_col:
     for word, count in LM_coll[token].items():
         if word not in ["#E", "#S"]:
             term_term.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(word)] = count
-
 
 #add sum to dataframe of each columns
 term_term = term_term.fillna(0)
@@ -824,8 +818,8 @@ for token, list_words in dict_sorted.items():
         else:
             break
 
-for k,v in all_query.items():
-    print(len(value))
+# for k,v in all_query.items():
+#     print(len(value))
 
 idx = 0
 first_queries = all_query[tokens[idx]].copy()
@@ -861,9 +855,13 @@ for i in range (idx+1, len(all_query.keys())):
                 if i == len(all_query.keys())-1:
                     final_queries.append(new_query)
 
-for q in final_queries:
-    bigram_q = LM_query(q)
-    index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
+#final_result = {k: [] for k in final_queries}
+parameters = optimals_parameters([LM_query(q) for q in final_queries])
+print(parameters)
+# for q in final_queries:
+#     bigram_q = LM_query(q)
+#     parameters = optimals_parameters(bigram_q)
+#     final_result[q] = parameters
 
 
 
