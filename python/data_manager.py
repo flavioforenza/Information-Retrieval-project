@@ -196,16 +196,17 @@ def rnd_query():
     query = ""
     print("Looking for a query...")
     while not category:
-        # = random.randint(0, len(data))
+        #rnd = random.randint(0, len(data))
         #rnd = 48566
         #rnd = 34582 #Interpolation
-        rnd = 11
-        #rnd = 37384
+        #rnd = 11
+        #rnd = 37384 ->0
         #rnd = 16068
         #rnd = 13037
         #rnd = 39800
         #rnd = 12800 #9-->0 duplicati
         #rnd = 10726
+        rnd = 28640
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -621,6 +622,8 @@ def getIndexRelDoc(tmp):
 def optimals_parameters(bigram_q):
     dicLapl = {k: [] for k in range(0,len(bigram_q))}
     dicInterp = {k: [] for k in range(0,len(bigram_q))}
+    perplexity_Lapl = {k: [] for k in range(0, len(bigram_q))}
+    perplexity_Interp = {k: [] for k in range(0, len(bigram_q))}
     with tqdm(total=(len(bigram_q)*9), file=sys.stdout) as pbar:
         pbar.write("Finding optimal parameters for queries...")
         for n in range(2 , 11, 1):
@@ -629,6 +632,12 @@ def optimals_parameters(bigram_q):
             #LAPLACE SMOOTHING
             for single_query in bigram_q:
                 scoreMLE = Laplace_smooth(LM_d, single_query)
+                lst_perplexity = []
+                for doc_LM, score_LM in scoreMLE.items():
+                    perplexity = (1/score_LM)**(1/len(single_query))
+                    lst_perplexity.append((doc_LM, perplexity))
+                min_perplexity = min(lst_perplexity, key = lambda t: t[1])
+                perplexity_Lapl[bigram_q.index(single_query)].append(min_perplexity)
                 tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
                 doc_rel_Lap = getIndexRelDoc(tmpLaplace)
                 dict_lapl_value = {}
@@ -638,8 +647,12 @@ def optimals_parameters(bigram_q):
                 lambda1 = 0
                 lambda2 = 1
                 results = {}
+                lst_perplexity_interp = []
                 for k in np.arange(0.1, 1.1, 0.1):
                     scoreDc = LinInterp_Smooth(LM_d, single_query, lambda1, lambda2, LM_coll)
+                    for doc_LM, score_LM in scoreDc.items():
+                        perplexity = (1 / score_LM) ** (1 / len(single_query))
+                        lst_perplexity_interp.append((doc_LM, perplexity))
                     tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
                     doc_rel_Int = getIndexRelDoc(tmpInterp)
                     results[(lambda1, lambda2, tuple(tmpInterp))] = doc_rel_Int
@@ -647,6 +660,8 @@ def optimals_parameters(bigram_q):
                     lambda2 = 1 - k
                     if lambda2==0:
                         break
+                min_perplexity_interp = min(lst_perplexity_interp, key = lambda t: t[1])
+                perplexity_Interp[bigram_q.index(single_query)].append(min_perplexity_interp)
                 minimum = min(results.items(), key=lambda x:x[1])
                 dict_interp_value={}
                 dict_interp_value[n] = minimum
@@ -672,6 +687,7 @@ def optimals_parameters(bigram_q):
 
             if min_value_lapl<min_value_interp:
                 if index<min_value_lapl:
+                    pbar.update(1)
                     continue
                 else:
                     smoothing = "Laplacian"
@@ -681,6 +697,7 @@ def optimals_parameters(bigram_q):
                     dit_ret[i].append((smoothing, index, ngram, ranking))
             else:
                 if index<min_value_interp:
+                    pbar.update(1)
                     continue
                 else:
                     smoothing = 'Interpolation'
@@ -819,8 +836,8 @@ for token, list_words in dict_sorted.items():
         else:
             break
 
-# for k,v in all_query.items():
-#     print(len(value))
+for k,v in all_query.items():
+    print(len(value))
 
 idx = 0
 first_queries = all_query[tokens[idx]].copy()
@@ -858,13 +875,11 @@ for i in range (idx+1, len(all_query.keys())):
 
 #final_result = {k: [] for k in final_queries}
 print("Query generate: ", len(final_queries))
-final_temp = final_queries[:3]
-parameters = optimals_parameters([LM_query(q) for q in final_temp])
-print(parameters)
-# for q in final_queries:
-#     bigram_q = LM_query(q)
-#     parameters = optimals_parameters(bigram_q)
-#     final_result[q] = parameters
+parameters = optimals_parameters([LM_query(q) for q in final_queries])
+for k,v in parameters.items():
+    if v:
+      print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
+
 
 #k: token_query, v: list of tokens that occurs
 # result = {k: [] for k in tokens}
