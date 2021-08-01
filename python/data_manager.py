@@ -634,10 +634,11 @@ def optimals_parameters(bigram_q):
                 scoreMLE = Laplace_smooth(LM_d, single_query)
                 lst_perplexity = []
                 for doc_LM, score_LM in scoreMLE.items():
-                    perplexity = (1/score_LM)**(1/len(single_query))
-                    lst_perplexity.append((doc_LM, perplexity))
-                min_perplexity = min(lst_perplexity, key = lambda t: t[1])
-                perplexity_Lapl[bigram_q.index(single_query)].append(min_perplexity)
+                    if doc_LM == id_doc:
+                        perplexity = (1/score_LM)**(1/len(single_query))
+                        lst_perplexity.append((doc_LM, perplexity))
+                #doc_perpl = [(doc_id_target, score_target) for doc_id_target, score_target in lst_perplexity if doc_id_target == id_doc]
+                perplexity_Lapl[bigram_q.index(single_query)].append(lst_perplexity[0])
                 tmpLaplace = sorted(scoreMLE.items(), key=lambda x: -x[-1])
                 doc_rel_Lap = getIndexRelDoc(tmpLaplace)
                 dict_lapl_value = {}
@@ -647,12 +648,13 @@ def optimals_parameters(bigram_q):
                 lambda1 = 0.1
                 lambda2 = 0.9
                 results = {}
-                lst_perplexity_interp = []
+                dic_perplexity_interp = {}
                 for k in np.arange(0.1, 1.1, 0.1):
                     scoreDc = LinInterp_Smooth(LM_d, single_query, lambda1, lambda2, LM_coll)
                     for doc_LM, score_LM in scoreDc.items():
-                        perplex = (1 / score_LM) ** (1 / len(single_query))
-                        lst_perplexity_interp.append((doc_LM, perplex))
+                        if doc_LM == id_doc:
+                            perplex = (1 / score_LM) ** (1 / len(single_query))
+                            dic_perplexity_interp[(lambda1, lambda2)] = (doc_LM, perplex)
                     tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
                     doc_rel_Int = getIndexRelDoc(tmpInterp)
                     results[(lambda1, lambda2, tuple(tmpInterp))] = doc_rel_Int
@@ -660,8 +662,7 @@ def optimals_parameters(bigram_q):
                     lambda2 = 0.9 - k
                     if lambda2==0:
                         break
-                min_perplexity_interp = min(lst_perplexity_interp, key = lambda t: t[1])
-                perplexity_Interp[bigram_q.index(single_query)].append(min_perplexity_interp)
+                perplexity_Interp[bigram_q.index(single_query)].append(dic_perplexity_interp)
                 minimum = min(results.items(), key=lambda x:x[1])
                 dict_interp_value={}
                 dict_interp_value[n] = minimum
@@ -694,7 +695,7 @@ def optimals_parameters(bigram_q):
                     index = min_value_lapl
                     ngram = list(q_lapl[values_lapl.index([min_value_lapl])].keys())[0][0]
                     ranking = list(q_lapl[values_lapl.index([min_value_lapl])].keys())[0][1]
-                    dit_ret[i].append((smoothing, index, ngram, ranking, perplexity_Lapl))
+                    dit_ret[i].append((smoothing, index, ngram, ranking, perplexity_Lapl[i]))
             else:
                 if index<min_value_interp:
                     pbar.update(1)
@@ -706,7 +707,7 @@ def optimals_parameters(bigram_q):
                     l1 = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][0]
                     l2 = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][1]
                     ranking = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][2]
-                    dit_ret[i].append((smoothing, index, ngram, l1, l2, ranking, perplexity_Interp))
+                    dit_ret[i].append((smoothing, index, ngram, l1, l2, ranking, perplexity_Interp[i]))
             pbar.update(1)
     print("Best smoothing: ", smoothing)
     print("Index result: ", index)
@@ -883,16 +884,11 @@ for k,v in parameters.items():
         print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
         if v[0][0] == "Laplacian":
             perplexity_query = v[0][4]
-            for k, v in perplexity_query.items():
-                for (id_doc_q, score_w) in v:
-                    if id_doc_q == id_doc:
-                        print("Perplexity: ", score_w)
+            print("N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1])
         else:
             perplexity_query = v[0][6]
-            for k,v in perplexity_query.items():
-                for (id_doc_q, score_w) in v:
-                    if id_doc_q == id_doc:
-                        print("Perplexity: ", score_w)
+            score_w_intd = perplexity_query[v[0][2]-2]
+            print("N-grams: ", v[0][2], " Perplexity: ", score_w_intd[1])
 
 
 #k: token_query, v: list of tokens that occurs
