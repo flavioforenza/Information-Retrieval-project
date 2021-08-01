@@ -196,9 +196,9 @@ def rnd_query():
     query = ""
     print("Looking for a query...")
     while not category:
-        #rnd = random.randint(0, len(data))
+        rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
+        #rnd = 34582 #Interpolation
         #rnd = 11
         #rnd = 37384 ->0
         #rnd = 16068
@@ -884,12 +884,13 @@ for k,v in parameters.items():
         print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
         if v[0][0] == "Laplacian":
             perplexity_query = v[0][4]
-            print("N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1])
+            print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1])
         else:
             perplexity_query = v[0][6]
             score_w_intd = perplexity_query[v[0][2]-2]
-            print("N-grams: ", v[0][2], " Perplexity: ", score_w_intd[1])
+            print("Interpolation - N-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
 
+print("Ciao")
 
 #k: token_query, v: list of tokens that occurs
 # result = {k: [] for k in tokens}
