@@ -1,10 +1,6 @@
-import math
-import sys
 import pickle
 import string
 import sys
-from collections import defaultdict
-import random
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -13,6 +9,7 @@ import requests
 import scrape_schema_recipe as scr
 import seaborn as sns
 import spacy
+from collections import defaultdict
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
 from gensim.utils import tokenize
@@ -196,10 +193,10 @@ def rnd_query():
     query = ""
     print("Looking for a query...")
     while not category:
-        rnd = random.randint(0, len(data))
+        #rnd = random.randint(0, len(data))
         #rnd = 48566
         #rnd = 34582 #Interpolation
-        #rnd = 11
+        rnd = 11
         #rnd = 37384 ->0
         #rnd = 16068
         #rnd = 13037
@@ -669,10 +666,6 @@ def optimals_parameters(bigram_q):
                 dicInterp[bigram_q.index(single_query)].append(dict_interp_value)
                 pbar.update(1)
     index = len(data)+1
-    smoothing = ""
-    ngram = 0
-    l1 = 0
-    l2 = 0
     dit_ret = {k: [] for k in range(0,len(bigram_q))}
     with tqdm(total=len(bigram_q), file=sys.stdout) as pbar:
         pbar.write("Search for the relevant document index...")
@@ -709,12 +702,6 @@ def optimals_parameters(bigram_q):
                     ranking = list(q_interp[all_value_interp.index([min_value_interp])].values())[0][0][2]
                     dit_ret[i].append((smoothing, index, ngram, l1, l2, ranking, perplexity_Interp[i]))
             pbar.update(1)
-    print("Best smoothing: ", smoothing)
-    print("Index result: ", index)
-    print("N-gram: ", ngram)
-    if smoothing == 'Interpolation':
-        print("Lambda1: ", l1)
-        print("Lambda2: ", l2)
     return dit_ret
 
 bigram_q = LM_query(query)
@@ -876,140 +863,61 @@ for i in range (idx+1, len(all_query.keys())):
                 if i == len(all_query.keys())-1:
                     final_queries.append(new_query)
 
-#final_result = {k: [] for k in final_queries}
 print("Query generate: ", len(final_queries))
-parameters = optimals_parameters([LM_query(q) for q in final_queries[:100]])
+parameters = optimals_parameters([LM_query(q) for q in final_queries])
 for k,v in parameters.items():
     if v:
         print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
         if v[0][0] == "Laplacian":
             perplexity_query = v[0][4]
-            print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1])
+            print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
         else:
             perplexity_query = v[0][6]
             score_w_intd = perplexity_query[v[0][2]-2]
             print("Interpolation - N-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
 
-print("Ciao")
+all_dict_perpl_lapl = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Laplacian']
+all_dict_perpl_interp = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Interpolation']
 
-#k: token_query, v: list of tokens that occurs
-# result = {k: [] for k in tokens}
-# for token in tokens:
-#     other_words = {token:[]} #può avere la lista vuota
-#     for word, count in LM_coll[token].items():
-#         other_words[token].append((word,count))
-#         #print(token, " ", word, ": ", count)
-#     #print("Len other_words: ", len(other_words[token]))
-#     if len(other_words[token])>0:
-#         max_value = max(other_words[token], key=lambda x: x[1])
-#         remaining = [(word, count) for (word, count) in other_words[token] if count==max_value[1]]
-#         #print("Len remaining: ", len(remaining))
-#         result[token].append([word for (word,count) in remaining])
+min_perpl = sys.maxsize
+for (k_parameters, perpl) in all_dict_perpl_lapl:
+    for (id_doc_p, score_p) in perpl:
+        if score_p < min_perpl:
+            min_perpl = score_p
 
-# #query expansion
-# tmp_query = []
-# for token, word_exp in result.items():
-#     if len(word_exp)>0:
-#         for i in word_exp:
-#             if len(i)==1:
-#                 new_query = token + " " + i[0]
-#                 tmp_query.append(new_query)
-#             elif len(i)>1:
-#                 for k in i:
-#                     new_query = token + " " + k
-#                     tmp_query.append(new_query)
-#     else:
-#         tmp_query.append(token)
-#
-# some_queries = []
-# final_query = ""
-# #contiene le restanti parole da unire a una parola nella query
-# lst_other = []
-# for strings in tmp_query:
-#     #tokenizer
-#     words = principal_tokenizer(strings)
-#     if words[0] not in final_query:
-#         #se vi è una word in coppia
-#         if len(words)>1:
-#             if words[1] not in ["#E", "#", "E"]:
-#                 if final_query=="":
-#                     final_query += strings
-#                 else:
-#                     final_query += " " + strings
-#         else:
-#             final_query += " " + strings
-#     else:
-#         lst_other.append(strings)
-# some_queries.append(final_query)
-#
-# for oth in lst_other:
-#     len_some = len(some_queries)
-#     while len_some!=0:
-#         tmp = principal_tokenizer(some_queries[len_some-1])
-#         strings = principal_tokenizer(oth)
-#         #string[0] == token in query
-#         if strings[0] in tmp:
-#             #check boundary
-#             if tmp.index(strings[0]) == len(tmp)-1 or tmp[tmp.index(strings[0])+1] not in lst_other:
-#                 temp_list = []
-#                 new_query = ""
-#                 for i in tmp:
-#                     temp_list.append(i)
-#                     if i == tmp[tmp.index(strings[0])]:
-#                         temp_list.append(strings[1])
-#                 for i in temp_list:
-#                     if new_query == "":  # remove initial space
-#                         new_query += i
-#                         final_query = new_query
-#                     else:
-#                         new_query += " " + i
-#                         final_query = new_query
-#                 some_queries.append(new_query)
-#                 len_some -= 1
-#             else:
-#                 tmp[tmp.index(strings[0])+1] = strings[1]
-#                 new_query = ""
-#                 for i in tmp:
-#                     if new_query == "":
-#                         new_query += i
-#                         final_query = new_query
-#                     else:
-#                         new_query += " " + i
-#                         final_query = new_query
-#                 some_queries.append(new_query)
-#                 len_some -= 1
-#
-# print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-# print("Query generate: ", len(some_queries))
-# print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-#
-# print("Instructions: ", id_instr[id_doc])
-#
-# def clean_query():
-#     for q in some_queries:
-#         tmpq = q
-#         tkns = text_to_word_sequence(q)
-#         for tkn in tkns:
-#             if tkn in ['e', 'f', '#E', '#S' ]:
-#                 tmpq.replace(tkn, '')
-#                 some_queries[some_queries.index(q)] = tmpq
-#             # if (tkns.count(tkn)>1):
-#             #     indices = [i for i, x in enumerate(tkns) if x == tkn]
-#             #     for i in indices:
-#             #         if indices.index(i)>0:
-#             #             del tkns[i]
-#
-# #clean_query()
-#
-# for q in some_queries:
-#     #switching tokenizer is possibile to find white space in query
-#     if q.find(query)==-1:
-#         print("##################################")
-#         print("Query: ", q)
-#         bigram_q = LM_query(q)
-#         index, smoothing, ngram, lmb1, lmb2, newRanking = optimals_parameters(bigram_q)
+for (k_parameters, perpl) in all_dict_perpl_interp:
+    for dictionary in perpl:
+        for k_p_i, v_p_i in dictionary.items():
+            if v_p_i[1] < min_perpl:
+                min_perpl = v_p_i[1]
+
+print("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+print("Queries with Perplexity: ", min_perpl)
+for (k_parameters, perpl) in all_dict_perpl_lapl:
+    for (id_doc_p, score_p) in perpl:
+        if score_p == min_perpl:
+            informations = parameters[k_parameters]
+            print("Query: ", final_queries[k_parameters],
+                  " Smoothing: ", informations[0][0],
+                  " Index: ", informations[0][1],
+                  " Skip-grams: ", informations[0][2])
+
+for (k_parameters, perpl) in all_dict_perpl_interp:
+    for dictionary in perpl:
+        for k_p_i, v_p_i in dictionary.items():
+            if v_p_i[1] == min_perpl:
+                informations = parameters[k_parameters]
+                print("Query: ", final_queries[k_parameters],
+                      " Smoothing: ", informations[0][0],
+                      " Index: ", informations[0][1],
+                      " Skip-grams: ", informations[0][2],
+                      " Lambda1: ", informations[0][3],
+                      " Lambda2: ", informations[0][4])
 
 
+
+
+#Fine
 
 
 
