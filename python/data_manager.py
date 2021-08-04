@@ -1,3 +1,4 @@
+import random
 import pickle
 import string
 import sys
@@ -195,8 +196,8 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 34582 #Interpolation
-        rnd = 11
+        rnd = 34582 #Interpolation
+        #rnd = 11
         #rnd = 37384 ->0
         #rnd = 16068
         #rnd = 13037
@@ -594,7 +595,6 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
         if score>=thr:
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
-                #tokenizer
                 tokens = principal_tokenizer(instructions)
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
@@ -602,12 +602,10 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
     return LM_coll
 
 def LM_query(q):
-    #tokenizer
     tokens = principal_tokenizer(q)
     tokens = ["#S"] + tokens + ["#E"]
     bigram = list(ngrams(tokens, 2))
     return bigram
-
 
 def getIndexRelDoc(tmp):
     doc_rel = 0
@@ -704,220 +702,216 @@ def optimals_parameters(bigram_q):
             pbar.update(1)
     return dit_ret
 
-bigram_q = LM_query(query)
-parameters = optimals_parameters([bigram_q])
-for k,v in parameters.items():
-    if v[0][0] == "Laplacian":
-        smoothing = v[0][0]
-        index = v[0][1]
-        ngram = v[0][2]
-        newRanking = v[0][3]
-        perplexity = v[0][4]
-    else:
-        smoothing = v[0][0]
-        index = v[0][1]
-        ngram = v[0][2]
-        l1 = v[0][3]
-        l2 = v[0][4]
-        newRanking = v[0][5]
-        perplexity = v[0][6]
-
-print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
-#Co-Occurrence method
-tokens = principal_tokenizer(query)
-newRanking = list(newRanking)
-relevant_documents = []
-for i in range(0, index+1):
-    relevant_documents.append(([newRanking[i][0]],newRanking[i][1]))
-thr_new = newRanking[index][1]
-
-LM_coll = getLM_coll(2, relevant_documents, thr_new)
-
-#create term-term dataframe
-# rows = terms of queries
-# columns =terms of relevant documents
-row_col = [word for word,count in LM_coll.items() if word not in ["#E", "#S"]]
-for token in tokens:
-    if token not in row_col and token not in ["#E", "#S"]:
-        row_col.append(token)
-
-term_term = pd.DataFrame(columns=row_col, index=row_col)
-
-#fill dataframe
-for token in row_col:
-    for word, count in LM_coll[token].items():
-        if word not in ["#E", "#S"]:
-            term_term.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(word)] = count
-
-#add sum to dataframe of each columns
-term_term = term_term.fillna(0)
-sumCol = term_term.sum(axis=0)
-term_term.loc["count(context)"] = term_term.sum(axis=0)
-term_term["count(w)"] = term_term.sum(axis=1)
-max_value = term_term["count(w)"].max()
+def term_term_matrix():
+    print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
+    bigram_q = LM_query(query)
+    parameters = optimals_parameters([bigram_q])
+    for k,v in parameters.items():
+        if v[0][0] == "Laplacian":
+            index = v[0][1]
+            newRanking = v[0][3]
+        else:
+            index = v[0][1]
+            newRanking = v[0][5]
+    #Co-Occurrence method
+    tokens = principal_tokenizer(query)
+    newRanking = list(newRanking)
+    relevant_documents = []
+    for i in range(0, index+1):
+        relevant_documents.append(([newRanking[i][0]],newRanking[i][1]))
+    thr_new = newRanking[index][1]
+    LM_coll = getLM_coll(2, relevant_documents, thr_new)
+    row_col = [word for word,count in LM_coll.items() if word not in ["#E", "#S"]]
+    for token in tokens:
+        if token not in row_col and token not in ["#E", "#S"]:
+            row_col.append(token)
+    term_term = pd.DataFrame(columns=row_col, index=row_col)
+    #fill dataframe
+    for token in row_col:
+        for word, count in LM_coll[token].items():
+            if word not in ["#E", "#S"]:
+                term_term.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(word)] = count
+    #add sum to dataframe of each columns
+    term_term = term_term.fillna(0)
+    #sumCol = term_term.sum(axis=0)
+    term_term.loc["count(context)"] = term_term.sum(axis=0)
+    term_term["count(w)"] = term_term.sum(axis=1)
+    max_value = term_term["count(w)"].max()
+    return tokens, row_col, LM_coll, term_term, max_value
 
 print("Instructions: ", id_instr[id_doc])
 
 #create a equal dataframe to term_temr with PPMI values
-pmi_matrix = pd.DataFrame(columns= row_col, index=row_col)
-for token in row_col:
-    for context, count in LM_coll.items():
-        if context not in ["#E", "#S"]:
-            #print("Row: ", token, " Column: ", context)
-            if term_term.iloc[term_term.index.get_loc(token)][context] != 0:
-                p_wc = term_term.iloc[term_term.index.get_loc(token)][context]/max_value
-                if term_term.iloc[term_term.index.get_loc(token)]["count(w)"] != 0:
-                    p_w = term_term.iloc[term_term.index.get_loc(token)]["count(w)"]/max_value
-                if term_term.iloc[term_term.index.get_loc("count(context)")][context] != 0:
-                    p_c = term_term.iloc[term_term.index.get_loc("count(context)")][context]/max_value
-                ppmi_value = max(np.log2(p_wc/(p_w*p_c)), 0)
-                pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = ppmi_value
-            else:
-                pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
+def pmi_matrix(row_col, LM_coll, term_term, max_value):
+    pmi_matrix = pd.DataFrame(columns= row_col, index=row_col)
+    for token in row_col:
+        for context, count in LM_coll.items():
+            if context not in ["#E", "#S"]:
+                #print("Row: ", token, " Column: ", context)
+                if term_term.iloc[term_term.index.get_loc(token)][context] != 0:
+                    p_wc = term_term.iloc[term_term.index.get_loc(token)][context]/max_value
+                    if term_term.iloc[term_term.index.get_loc(token)]["count(w)"] != 0:
+                        p_w = term_term.iloc[term_term.index.get_loc(token)]["count(w)"]/max_value
+                    if term_term.iloc[term_term.index.get_loc("count(context)")][context] != 0:
+                        p_c = term_term.iloc[term_term.index.get_loc("count(context)")][context]/max_value
+                    ppmi_value = max(np.log2(p_wc/(p_w*p_c)), 0)
+                    pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = ppmi_value
+                else:
+                    pmi_matrix.iloc[term_term.index.get_loc(token), term_term.columns.get_loc(context)] = 0
+    return pmi_matrix
 
 #SVD/LSI for matrix factorization
-matrix_tmp = np.matrix(pmi_matrix, dtype=float)
-sparsity_with_PPMI = 1-(np.count_nonzero(matrix_tmp)/matrix_tmp.size)
-U, S, Vt = np.linalg.svd(matrix_tmp)
-
-S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
-np.fill_diagonal(S2, S)
-U_S= np.dot(U,S2)
-S_Vt = np.dot(S2, Vt)
-
-sparsity_with_SVD = 1-(np.count_nonzero(S_Vt)/S_Vt.size)
-
-idxs = [pmi_matrix.index.get_loc(token) for token in tokens]
-
-df_U_S = pd.DataFrame(np.array(U_S), columns= row_col, index=row_col)
-df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
-
-#get the query rows from df_S_Vt
-vector_tokens_query = {k: [] for k in tokens}
-for token in tokens:
-    for column in df_U_S.columns:
-        if column != token:
-            score_similarity = cosine_similarity(np.matrix(df_S_Vt[token].tolist()),
-                                                 np.matrix(df_U_S[column].tolist()))[0]
-            vector_tokens_query[token].append((column, score_similarity[0]))
-
-#order each word for each token in query
-dict_sorted = {k: [] for k in tokens}
-for key, value in vector_tokens_query.items():
-    dict_sorted[key].append(sorted(value, key=lambda x:-x[-1]))
+def SVD_cosine_matrix(pmi_matrix, tokens, row_col):
+    matrix_tmp = np.matrix(pmi_matrix, dtype=float)
+    sparsity_with_PPMI = 1-(np.count_nonzero(matrix_tmp)/matrix_tmp.size)
+    print("Sparsity matrix with PPMI: ", sparsity_with_PPMI)
+    U, S, Vt = np.linalg.svd(matrix_tmp)
+    S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
+    np.fill_diagonal(S2, S)
+    U_S= np.dot(U,S2)
+    S_Vt = np.dot(S2, Vt)
+    sparsity_with_SVD = 1-(np.count_nonzero(S_Vt)/S_Vt.size)
+    print("Sparsity matrix with SVD: ", sparsity_with_SVD)
+    #idxs = [pmi_matrix.index.get_loc(token) for token in tokens]
+    df_U_S = pd.DataFrame(np.array(U_S), columns= row_col, index=row_col)
+    df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
+    #get the query rows from df_S_Vt
+    vector_tokens_query = {k: [] for k in tokens}
+    for token in tokens:
+        for column in df_U_S.columns:
+            if column != token:
+                score_similarity = cosine_similarity(np.matrix(df_S_Vt[token].tolist()),
+                                                     np.matrix(df_U_S[column].tolist()))[0]
+                vector_tokens_query[token].append((column, score_similarity[0]))
+    #order each word for each token in query
+    dict_sorted = {k: [] for k in tokens}
+    for key, value in vector_tokens_query.items():
+        dict_sorted[key].append(sorted(value, key=lambda x:-x[-1]))
+    return dict_sorted
 
 #creare una lista di query. Partire dalla query originale ed effettuare delle combinazioni con le parole occorrenti
-dict_sorted_update = {k: [] for k in tokens}
-all_query = {k: [] for k in tokens}
-for token, list_words in dict_sorted.items():
-    count = 0 #to select the k=10 top words
-    for (word, score) in list_words[0]:
-        if count <10:
-            if score>0:
-                support = []
-                support = tokens.copy()
-                if word not in support:
-                    dict_sorted_update[token].append((word,score))
-                    idx = support.index(token)
-                    support.insert(idx+1, word)
-                    new_query = ' '.join(support)
-                    all_query[token].append(new_query)
-                    count+=1
+def query_expansion(tokens, dict_sorted):
+    dict_sorted_update = {k: [] for k in tokens}
+    all_query = {k: [] for k in tokens}
+    for token, list_words in dict_sorted.items():
+        count = 0 #to select the k=10 top words
+        for (word, score) in list_words[0]:
+            if count <10:
+                if score>0:
+                    support = []
+                    support = tokens.copy()
+                    if word not in support:
+                        dict_sorted_update[token].append((word,score))
+                        idx = support.index(token)
+                        support.insert(idx+1, word)
+                        new_query = ' '.join(support)
+                        all_query[token].append(new_query)
+                        count+=1
+            else:
+                break
+    # for k,v in all_query.items():
+    #     print(len(v))
+    idx = 0
+    first_queries = all_query[tokens[idx]].copy()
+    while not first_queries:
+        idx+=1
+        first_queries = all_query[tokens[idx]]
+    final_queries = []
+    tmp_list_queries = []
+    for i in range (idx+1, len(all_query.keys())):
+        #copia delle prime query
+        if not tmp_list_queries:
+            temp = first_queries.copy()
         else:
+            temp = tmp_list_queries.copy()
+        if len(dict_sorted_update[tokens[i]])>=10:
+            tq_w = dict_sorted_update[tokens[i]][:10].copy()
+        else:
+            tq_w = dict_sorted_update[tokens[i]].copy()
+        if not tq_w:
             break
+        for single_query in temp:
+            #tokenizzo la single_query
+            tks_query = principal_tokenizer(single_query)
+            #t = co-occurrence word, w: weight
+            for (t,w) in tq_w:
+                if w>0:
+                    query_copy = tks_query.copy() #10
+                    idx = query_copy.index(tokens[i])
+                    query_copy.insert(idx+1,t)
+                    new_query = ' '.join(query_copy)
+                    tmp_list_queries.append(new_query)
+                    if i == len(all_query.keys())-1:
+                        final_queries.append(new_query)
+    return final_queries
 
-for k,v in all_query.items():
-    print(len(value))
+def show_information_queries(final_queries):
+    print("Query generate: ", len(final_queries))
+    parameters = optimals_parameters([LM_query(q) for q in final_queries[:100]])
+    for k,v in parameters.items():
+        if v:
+            print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
+            if v[0][0] == "Laplacian":
+                perplexity_query = v[0][4]
+                print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
+            else:
+                perplexity_query = v[0][6]
+                score_w_intd = perplexity_query[v[0][2]-2]
+                print("Interpolation - N-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
+    return parameters
 
-idx = 0
-first_queries = all_query[tokens[idx]].copy()
-while not first_queries:
-    idx+=1
-    first_queries = all_query[tokens[idx]]
+def get_low_queries_perplexity(final_queries, parameters):
+    all_dict_perpl_lapl = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Laplacian']
+    all_dict_perpl_interp = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Interpolation']
 
-final_queries = []
-tmp_list_queries = []
-for i in range (idx+1, len(all_query.keys())):
-    #copia delle prime query
-    if not tmp_list_queries:
-        temp = first_queries.copy()
-    else:
-        temp = tmp_list_queries.copy()
-    if len(dict_sorted_update[tokens[i]])>=10:
-        tq_w = dict_sorted_update[tokens[i]][:10].copy()
-    else:
-        tq_w = dict_sorted_update[tokens[i]].copy()
-    if not tq_w:
-        break
-    for single_query in temp:
-        #tokenizzo la single_query
-        tks_query = principal_tokenizer(single_query)
-        #t = co-occurrence word, w: weight
-        for (t,w) in tq_w:
-            if w>0:
-                query_copy = tks_query.copy() #10
-                idx = query_copy.index(tokens[i])
-                query_copy.insert(idx+1,t)
-                new_query = ' '.join(query_copy)
-                tmp_list_queries.append(new_query)
-                if i == len(all_query.keys())-1:
-                    final_queries.append(new_query)
+    min_perpl = sys.maxsize
+    for (k_parameters, perpl) in all_dict_perpl_lapl:
+        for (id_doc_p, score_p) in perpl:
+            if score_p < min_perpl:
+                min_perpl = score_p
 
-print("Query generate: ", len(final_queries))
-parameters = optimals_parameters([LM_query(q) for q in final_queries])
-for k,v in parameters.items():
-    if v:
-        print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
-        if v[0][0] == "Laplacian":
-            perplexity_query = v[0][4]
-            print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
-        else:
-            perplexity_query = v[0][6]
-            score_w_intd = perplexity_query[v[0][2]-2]
-            print("Interpolation - N-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
+    for (k_parameters, perpl) in all_dict_perpl_interp:
+        for dictionary in perpl:
+            for k_p_i, v_p_i in dictionary.items():
+                if v_p_i[1] < min_perpl:
+                    min_perpl = v_p_i[1]
 
-all_dict_perpl_lapl = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Laplacian']
-all_dict_perpl_interp = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Interpolation']
-
-min_perpl = sys.maxsize
-for (k_parameters, perpl) in all_dict_perpl_lapl:
-    for (id_doc_p, score_p) in perpl:
-        if score_p < min_perpl:
-            min_perpl = score_p
-
-for (k_parameters, perpl) in all_dict_perpl_interp:
-    for dictionary in perpl:
-        for k_p_i, v_p_i in dictionary.items():
-            if v_p_i[1] < min_perpl:
-                min_perpl = v_p_i[1]
-
-print("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-print("Queries with Perplexity: ", min_perpl)
-for (k_parameters, perpl) in all_dict_perpl_lapl:
-    for (id_doc_p, score_p) in perpl:
-        if score_p == min_perpl:
-            informations = parameters[k_parameters]
-            print("Query: ", final_queries[k_parameters],
-                  " Smoothing: ", informations[0][0],
-                  " Index: ", informations[0][1],
-                  " Skip-grams: ", informations[0][2])
-
-for (k_parameters, perpl) in all_dict_perpl_interp:
-    for dictionary in perpl:
-        for k_p_i, v_p_i in dictionary.items():
-            if v_p_i[1] == min_perpl:
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print("Queries with Perplexity: ", min_perpl)
+    for (k_parameters, perpl) in all_dict_perpl_lapl:
+        for (id_doc_p, score_p) in perpl:
+            if score_p == min_perpl:
                 informations = parameters[k_parameters]
                 print("Query: ", final_queries[k_parameters],
                       " Smoothing: ", informations[0][0],
                       " Index: ", informations[0][1],
-                      " Skip-grams: ", informations[0][2],
-                      " Lambda1: ", informations[0][3],
-                      " Lambda2: ", informations[0][4])
+                      " Skip-grams: ", informations[0][2])
+
+    for (k_parameters, perpl) in all_dict_perpl_interp:
+        for dictionary in perpl:
+            for k_p_i, v_p_i in dictionary.items():
+                if v_p_i[1] == min_perpl:
+                    informations = parameters[k_parameters]
+                    print("Query: ", final_queries[k_parameters],
+                          " Smoothing: ", informations[0][0],
+                          " Index: ", informations[0][1],
+                          " Skip-grams: ", informations[0][2],
+                          " Lambda1: ", informations[0][3],
+                          " Lambda2: ", informations[0][4])
+
+tokens, row_col, LM_coll, term_term, max_value = term_term_matrix()
+Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
+dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
+final_queries = query_expansion(tokens, dict_sorted)
+parameters = show_information_queries(final_queries)
+get_low_queries_perplexity(final_queries, parameters)
 
 
+def main():
+    pass
 
-
-#Fine
+if __name__ == "__main__":
+    main()
 
 
 
