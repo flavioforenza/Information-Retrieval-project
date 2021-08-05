@@ -13,9 +13,6 @@ import spacy
 from collections import defaultdict
 from bson.objectid import ObjectId
 from gensim.parsing.preprocessing import remove_stopwords
-from gensim.utils import tokenize
-from keras.preprocessing.text import text_to_word_sequence
-from nltk.tokenize import word_tokenize
 from nltk.util import ngrams
 from sklearn.decomposition import PCA
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -23,6 +20,7 @@ from sklearn.metrics import precision_recall_curve
 from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from usda.client import UsdaClient
+from tokenizers import Tokenizer
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
@@ -32,39 +30,14 @@ db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
 
-'''
-SWITCH TOKENIZERS
-'''
-def spacy_tokenizer(text=None):
-    if text == None:
-        return 0
-    tokens = []
-    doc = sp(text)
-    for token in doc:
-        tokens.append(token.text)
-    return tokens
+tokenizer = 0
 
-def gensim_tokenizer(text=None):
-    if text == None:
-        return 0
-    tokens = []
-    doc = tokenize(text)
-    for token in doc:
-        tokens.append(token)
-    return tokens
+def set_tokenizer(name):
+    global tokenizer
+    tokenizer = Tokenizer(name)
 
-def tokenizer(token):
-    switcher={
-        'spacy': spacy_tokenizer,
-        'gensim': gensim_tokenizer,
-        'keras': text_to_word_sequence,
-        'nltk': word_tokenize
-    }
-    return switcher.get(token, lambda:'Invalid tokenizer')
-
-tokenizer_name = 'keras'
-principal_tokenizer = tokenizer(tokenizer_name)
-
+#MAIN
+set_tokenizer('keras')
 '''
 PLOT STATISTICS OF DATASET
 '''
@@ -149,7 +122,7 @@ def get_id_cleanTokens(columns):
 def ranking(query):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
-    vectorizer = TfidfVectorizer(tokenizer=principal_tokenizer)
+    vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
     docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query])
     #dict of relevant documents and scores
@@ -227,7 +200,7 @@ print("Categories query: ", queryCat)
 print("Id Doc: ", id_doc)
 
 '''
-COMPUTE TFIDFVECTORIZE AND COSINE SIMILARITY
+COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
 '''
 #MAIN
 indexDoc_score = ranking(query)
@@ -236,7 +209,7 @@ indexDoc_score = ranking(query)
 doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexDoc_score[0]), key=lambda x: -x[-1])]
 
 #get the weight as threshold
-threshold = [v for k,v in doc_score if k == id_doc]
+threshold = [v for k,v in doc_score if k == id_doc][0]
 print("Threshold/Score document: ", threshold)
 
 for (id,w) in doc_score:
@@ -401,6 +374,7 @@ def getEntitiesQuery_USDA():
 
 #ricerca delle categorie dei documenti rilevanti con scrape vuoto
 #docCat_some_empty = getEntitiesDoc_USDA()
+
 #categorie ingredienti query
 #lst_ingr_q_USDA = getEntitiesQuery_USDA()
 
@@ -465,7 +439,7 @@ PCA
 
 def showPCA(query, all_relevant_documents):
     #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
-    vectorizer = TfidfVectorizer(tokenizer=principal_tokenizer)
+    vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
     documents = vectorizer.fit_transform(all_relevant_documents)
     qr = vectorizer.transform([query])
     pca = PCA(n_components=2)
@@ -492,7 +466,7 @@ if len(all_relevant_documents)>1:
 
 ''''
 LANGUAGE MODEL
-1. Infer a LM for each document (PAG. 224)
+Infer a LM for each document (PAG. 224)
 '''
 
 # k-grams (s_min=2)
@@ -513,7 +487,7 @@ def getLM_docs(step, documents = doc_score, thr = threshold):
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
                 #tokenizer
-                tokens = principal_tokenizer(instructions)
+                tokens = tokenizer.get_model()(instructions)
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM[a][b] += 1
@@ -595,14 +569,14 @@ def getLM_coll(step, documents = doc_score, thr = threshold):
         if score>=thr:
             if id_instr[doc[0]]:
                 instructions = id_instr[doc[0]]
-                tokens = principal_tokenizer(instructions)
+                tokens = tokenizer.get_model()(instructions)
                 tokens = ["#S"] + tokens + ["#E"]
                 for (a, b) in list(skip(tokens, step)):
                     LM_coll[a][b] += 1
     return LM_coll
 
 def LM_query(q):
-    tokens = principal_tokenizer(q)
+    tokens = tokenizer.get_model()(q)
     tokens = ["#S"] + tokens + ["#E"]
     bigram = list(ngrams(tokens, 2))
     return bigram
@@ -714,7 +688,7 @@ def term_term_matrix():
             index = v[0][1]
             newRanking = v[0][5]
     #Co-Occurrence method
-    tokens = principal_tokenizer(query)
+    tokens = tokenizer.get_model()(query)
     newRanking = list(newRanking)
     relevant_documents = []
     for i in range(0, index+1):
@@ -772,7 +746,6 @@ def SVD_cosine_matrix(pmi_matrix, tokens, row_col):
     S_Vt = np.dot(S2, Vt)
     sparsity_with_SVD = 1-(np.count_nonzero(S_Vt)/S_Vt.size)
     print("Sparsity matrix with SVD: ", sparsity_with_SVD)
-    #idxs = [pmi_matrix.index.get_loc(token) for token in tokens]
     df_U_S = pd.DataFrame(np.array(U_S), columns= row_col, index=row_col)
     df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
     #get the query rows from df_S_Vt
@@ -798,7 +771,6 @@ def query_expansion(tokens, dict_sorted):
         for (word, score) in list_words[0]:
             if count <10:
                 if score>0:
-                    support = []
                     support = tokens.copy()
                     if word not in support:
                         dict_sorted_update[token].append((word,score))
@@ -809,8 +781,8 @@ def query_expansion(tokens, dict_sorted):
                         count+=1
             else:
                 break
-    # for k,v in all_query.items():
-    #     print(len(v))
+    for k,v in all_query.items():
+        print(len(v))
     idx = 0
     first_queries = all_query[tokens[idx]].copy()
     while not first_queries:
@@ -832,7 +804,7 @@ def query_expansion(tokens, dict_sorted):
             break
         for single_query in temp:
             #tokenizzo la single_query
-            tks_query = principal_tokenizer(single_query)
+            tks_query = tokenizer.get_model()(single_query)
             #t = co-occurrence word, w: weight
             for (t,w) in tq_w:
                 if w>0:
@@ -883,9 +855,9 @@ def get_low_queries_perplexity(final_queries, parameters):
             if score_p == min_perpl:
                 informations = parameters[k_parameters]
                 print("Query: ", final_queries[k_parameters],
-                      " Smoothing: ", informations[0][0],
-                      " Index: ", informations[0][1],
-                      " Skip-grams: ", informations[0][2])
+                      " - Smoothing: ", informations[0][0],
+                      " - Index: ", informations[0][1],
+                      " - Skip-grams: ", informations[0][2])
 
     for (k_parameters, perpl) in all_dict_perpl_interp:
         for dictionary in perpl:
@@ -893,11 +865,11 @@ def get_low_queries_perplexity(final_queries, parameters):
                 if v_p_i[1] == min_perpl:
                     informations = parameters[k_parameters]
                     print("Query: ", final_queries[k_parameters],
-                          " Smoothing: ", informations[0][0],
-                          " Index: ", informations[0][1],
-                          " Skip-grams: ", informations[0][2],
-                          " Lambda1: ", informations[0][3],
-                          " Lambda2: ", informations[0][4])
+                          " - Smoothing: ", informations[0][0],
+                          " - Index: ", informations[0][1],
+                          " - Skip-grams: ", informations[0][2],
+                          " - Lambda1: ", informations[0][3],
+                          " - Lambda2: ", informations[0][4])
 
 tokens, row_col, LM_coll, term_term, max_value = term_term_matrix()
 Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
@@ -908,10 +880,40 @@ get_low_queries_perplexity(final_queries, parameters)
 
 
 def main():
-    pass
+    tokenizer_name = 'keras'
+    principal_tokenizer = tokenizer(tokenizer_name)
+
+    # MAIN
+    category, query, folder, id_doc, idx_q = rnd_query()
+    queryCat = np.unique(category).tolist()
+    print("Query:", query)
+    print("Query idx: ", idx_q)
+    print("Categories query: ", queryCat)
+    print("Id Doc: ", id_doc)
+
+    '''
+    COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
+    '''
+    # MAIN
+    indexDoc_score = ranking(query)
+
+    # useful for obtaining the filtered ranking
+    doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexDoc_score[0]), key=lambda x: -x[-1])]
+
+    # get the weight as threshold
+    threshold = [v for k, v in doc_score if k == id_doc][0]
+    print("Threshold/Score document: ", threshold)
+
+    for (id, w) in doc_score:
+        if id == id_doc:
+            print("Index with TFIDF: ", doc_score.index((id, w)))
+
+
+
 
 if __name__ == "__main__":
-    main()
+    pass
+    #main()
 
 
 
