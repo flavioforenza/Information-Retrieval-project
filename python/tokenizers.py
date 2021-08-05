@@ -7,12 +7,15 @@ sp = spacy.load('en_core_web_sm')
 
 class Tokenizer:
 
-    def __init__(self, name):
+    def __init__(self, name = ''):
         self.name = name
 
     '''
     SWITCH TOKENIZERS
     '''
+
+    def set_name(self, name):
+        self.name = name
 
     def spacy_tokenizer(text=None):
         if text == None:

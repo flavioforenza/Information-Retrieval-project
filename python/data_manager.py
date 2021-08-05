@@ -21,6 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from usda.client import UsdaClient
 from tokenizers import Tokenizer
+from query import Query
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
@@ -30,14 +31,6 @@ db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 sp = spacy.load('en_core_web_sm')
 #sp = spacy.load('xx_ent_wiki_sm')
 
-tokenizer = 0
-
-def set_tokenizer(name):
-    global tokenizer
-    tokenizer = Tokenizer(name)
-
-#MAIN
-set_tokenizer('keras')
 '''
 PLOT STATISTICS OF DATASET
 '''
@@ -119,15 +112,18 @@ def get_id_cleanTokens(columns):
 #get_id_cleanTokens(['id', 'instructions'])
 
 #COMPUTE THE COSINE SIMILARITY
-def ranking(query):
+def ranking(query_info, tokenizer):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
     vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
     docs = vectorizer.fit_transform(id_instr.values())
-    q = vectorizer.transform([query])
+    q = vectorizer.transform([query_info.query])
     #dict of relevant documents and scores
     doc_score = cosine_similarity(q, docs)
-    return doc_score
+    doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(doc_score[0]), key=lambda x: -x[-1])]
+    query_info.set_ranking(doc_score)
+    threshold = [v for k, v in doc_score if k == query_obj.id_doc][0]
+    query_info.set_threshold(threshold)
 
 def alterQuery():
     id_fQ = []
@@ -164,7 +160,6 @@ def getEntity_scrape(url):
 #take a random query from those available
 def rnd_query():
     category = []
-    query = ""
     print("Looking for a query...")
     while not category:
         #rnd = random.randint(0, len(data))
@@ -185,41 +180,42 @@ def rnd_query():
         query = data.iloc[rnd]['Query']
         query = clean_normalize(str(query))
         category.append(cat)
+        query_obj = Query(rnd, np.unique(category).tolist(), id_doc, query)
     # if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
     #     os.makedirs('imgs/query' + str(rnd) + 'thr10')
-    folder = ''
+    #folder = ''
     #folder = 'imgs/query' + str(rnd) + 'thr10'
-    return category, query, folder, id_doc, rnd
+    return query_obj
 
 #MAIN
-category, query, folder, id_doc, idx_q = rnd_query()
-queryCat = np.unique(category).tolist()
-print("Query:", query)
-print("Query idx: ", idx_q)
-print("Categories query: ", queryCat)
-print("Id Doc: ", id_doc)
+query_obj = rnd_query()
+print("Query:", query_obj.query)
+print("Query idx: ", query_obj.index)
+print("Categories query: ", query_obj.categories)
+print("Id Doc: ", query_obj.id_doc)
 
 '''
 COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
 '''
 #MAIN
-indexDoc_score = ranking(query)
+tokenizer = Tokenizer()
+tokenizer.set_name('keras')
+
+ranking(query_obj, tokenizer)
 
 #useful for obtaining the filtered ranking
-doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexDoc_score[0]), key=lambda x: -x[-1])]
 
 #get the weight as threshold
-threshold = [v for k,v in doc_score if k == id_doc][0]
-print("Threshold/Score document: ", threshold)
+print("Threshold/Score document: ", query_obj.threshold)
 
-for (id,w) in doc_score:
-    if id == id_doc:
-        print("Index with TFIDF: ", doc_score.index((id,w)))
+for (id,w) in query_obj.doc_score:
+    if id == query_obj.id_doc:
+        print("Index with TFIDF: ", query_obj.doc_score.index((id,w)))
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
 '''
-def search_DocCategories(thr):
+def search_DocCategories(thr, doc_score):
     data = pd.read_pickle("./OriginalRecipes.pkl")
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
@@ -243,9 +239,9 @@ def search_DocCategories(thr):
                                                        ignore_index=True)
     return cat_not_empty, cat_some_empty
 
-#docCat , docCat_some_empty= search_DocCategories(threshold[0])
+#docCat , docCat_some_empty= search_DocCategories(query_obj.threshold[0], query_obj.doc_score)
 
-relevant = [k[0] for k, i in doc_score if i >= threshold]
+relevant = [k[0] for k, i in query_obj.doc_score if i >= query_obj.threshold]
 docCat_some_empty = data[data['id'].isin(relevant)]
 docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
 
@@ -271,7 +267,7 @@ def getCatCorrispondece(qC, dC, estimate):
             y_pred.append(0)
     return y_pred
 
-def plot(precision, recall, title):
+def plot(precision, recall, title, query_obj):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10,5))
     fig.suptitle(title)
     ax1.plot(recall, precision)
@@ -283,7 +279,7 @@ def plot(precision, recall, title):
     ax2.plot(recall, I)
     ax2.set_xlabel('Interpolated Recall')
     ax2.set_ylabel('Precision')
-    plt.figtext(.5,.90,'thr='+str(threshold)+ '    ' + 'query: ' + query,fontsize=10,ha='center')
+    plt.figtext(.5,.90,'thr='+str(query_obj.threshold)+ '    ' + 'query: ' + query_obj.query,fontsize=10,ha='center')
     #plt.savefig('imgs/'+ folder +'.png')
     plt.show()
 
@@ -291,30 +287,30 @@ def plot(precision, recall, title):
 3 ONLY WITH SCRAPE_SCHEMA_RECIPE API
 '''
 
-def getPred(estimate, title, lstDoc, queryCat):
-    y_pred = getCatCorrispondece(queryCat, list(lstDoc['Scrape'].values), estimate)
-    d_score = [w for id, w in doc_score if w >= threshold and lstDoc['id'].isin(id).any().any()]
+def getPred(estimate, title, lstDoc, categories, query):
+    y_pred = getCatCorrispondece(categories, list(lstDoc['Scrape'].values), estimate)
+    d_score = [w for id, w in query.doc_score if w >= query.threshold and lstDoc['id'].isin(id).any().any()]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
-    #plot(precision, recall, title)
+    #plot(precision, recall, title, query.query)
     return avgP
 
 #1. DOCUMENTS WITHOUT ENTITIES = 1
 estimate = 1
 title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
-avgp = getPred(estimate, title, docCat_some_empty, queryCat)
+avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
 print("AVG OVERESTIMATED: ", avgp)
 
 #2. DOCUMENTS WITHOUT ENTITIES = 0
 estimate = 0
 title = 'UNDERESTIMATE SCRAPED ENTITIES = 0'
-avgp = getPred(estimate, title, docCat_some_empty, queryCat)
+avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
 print("AVG UNDERESTIMATE: ", avgp)
 
 #3. DISCARD DOCUMENTS WITHOUT ENTITIES
 title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
-avgp = getPred(estimate, title, docCat, queryCat)
+avgp = getPred(estimate, title, docCat, query_obj.categories, query_obj)
 print("AVG DISCARD: ", avgp)
 
 
@@ -363,7 +359,7 @@ def getEntitiesDoc_USDA():
 #docCat_some_empty.to_pickle("./some_empty_USDA.pkl")
 
 # get query category from USDA
-def getEntitiesQuery_USDA():
+def getEntitiesQuery_USDA(id_doc):
     q = data.iloc[id_doc]['Query']
     #get ingredients from this index
     qidx = data[data["Query"]==q].index.values
@@ -376,33 +372,33 @@ def getEntitiesQuery_USDA():
 #docCat_some_empty = getEntitiesDoc_USDA()
 
 #categorie ingredienti query
-#lst_ingr_q_USDA = getEntitiesQuery_USDA()
+#lst_ingr_q_USDA = getEntitiesQuery_USDA(query_obj.id_doc)
 
-lst_ingr_q_USDA = data.iloc[idx_q]['USDA']
+lst_ingr_q_USDA = data.iloc[query_obj.index]['USDA']
 
-def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat):
-    all_cat_query = queryCat+lst_ingr_q_USDA
+def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
+    all_cat_query = query_info.categories+lst_ingr_q_USDA
     title = 'DOCUMENTS WITH MIXED ENTITIES (SCRAPE+USDA)'
     datatemp = pd.DataFrame(columns=['id','Scrape'])
     datatemp['id'] = docCat_some_empty['id']
     datatemp['Scrape'] = docCat_some_empty['Scrape'] + docCat_some_empty['USDA']
-    avgp = getPred(0, title, datatemp, all_cat_query)
+    avgp = getPred(0, title, datatemp, all_cat_query, query_info)
     return avgp
 
 #attivare questo
-avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, queryCat)
+avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_obj)
 print("Avg MIXED: ", avgp)
 '''
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
 '''
 doc_USDAEntity = {}
-def only_USDA():
-    with tqdm(total=sum(i >= threshold for k,i in doc_score), file=sys.stdout) as pbar:
+def only_USDA(query):
+    with tqdm(total=sum(i >= query.threshold for k,i in query.doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
-        for doc_id, score in doc_score:
+        for doc_id, score in query.doc_score:
             #print("Entity search: document #", doc_id[0])
-            if score >= threshold:
+            if score >= query.threshold:
                 row = (data.loc[data['id'] == doc_id[0]])
                 ingredients = row['ingredients'].values
                 entities = get_entities_USDA(ingredients[0])
@@ -412,16 +408,12 @@ def only_USDA():
 #attivare questo
 #only_USDA()
 
-def plot_only_USDA():
-    #a_file = open("wdoc_USDAEntity.pkl", "rb")
-    #doc_USDAEntity = pickle.load(a_file)
-    #lst_ingr_q_USDA = pd.read_pickle("./lst_ingr_q_USDA.pkl")
-
+def plot_only_USDA(query):
     #remove warning numpy
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
     y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(docCat_some_empty['USDA'].values), 0)
     #y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
-    d_score = [i for k,i in doc_score if i>=threshold]
+    d_score = [i for k,i in query.doc_score if i>=query.threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
     #plot(precision, recall, title)
@@ -430,18 +422,18 @@ def plot_only_USDA():
     return avgP
 
 #attivare questo
-avgP = plot_only_USDA()
+avgP = plot_only_USDA(query_obj)
 print("Avg only USDA: ", avgP)
 
 '''
 PCA
 '''
 
-def showPCA(query, all_relevant_documents):
+def showPCA(query_info, all_relevant_documents):
     #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
     vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
     documents = vectorizer.fit_transform(all_relevant_documents)
-    qr = vectorizer.transform([query])
+    qr = vectorizer.transform([query_info.query])
     pca = PCA(n_components=2)
     v_docs = pca.fit_transform(documents.toarray())
     v_query = pca.transform(qr.toarray())
@@ -450,7 +442,7 @@ def showPCA(query, all_relevant_documents):
                 cmap=plt.cm.get_cmap('Accent', 10), label = 'Documents')
     plt.scatter(v_query[:, 0], v_query[:, 1], edgecolor='none', marker='*',
                 cmap=plt.cm.get_cmap('Paired', 10), label = 'Query', s=300)
-    plt.title('PCA' + '    thr='+str(threshold)+ '    ' + 'query: ' + query)
+    plt.title('PCA' + '    thr='+str(query_info.threshold)+ '    ' + 'query: ' + query_info.query)
     plt.legend()
     #plt.savefig('imgs/'+folder+'PCA')
     plt.show()
@@ -458,11 +450,11 @@ def showPCA(query, all_relevant_documents):
 with open('id_instructions.pkl', 'rb') as f:
     id_instr = pickle.load(f)
 all_relevant_documents = []
-for doc_id, score in doc_score:
-    if score >= threshold:
+for doc_id, score in query_obj.doc_score:
+    if score >= query_obj.threshold:
         all_relevant_documents.append(id_instr[doc_id[0]])
 if len(all_relevant_documents)>1:
-    showPCA(query, all_relevant_documents)
+    showPCA(query_obj, all_relevant_documents)
 
 ''''
 LANGUAGE MODEL
@@ -477,7 +469,7 @@ def skip(sequence, s=2):
             k_grams.append((sequence[i], sequence[j]))
     return k_grams
 
-def getLM_docs(step, documents = doc_score, thr = threshold):
+def getLM_docs(step, documents, thr):
     LMs_doc = {}
     ranking_id = []
     for doc, score in documents:
@@ -563,7 +555,7 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
     return new_dict
 
 #LM of entire collection
-def getLM_coll(step, documents = doc_score, thr = threshold):
+def getLM_coll(step, documents, thr):
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
     for doc, score in documents:
         if score>=thr:
@@ -584,11 +576,11 @@ def LM_query(q):
 def getIndexRelDoc(tmp):
     doc_rel = 0
     for (id,w) in tmp:
-        if id == id_doc:
+        if id == query_obj.id_doc:
             doc_rel = tmp.index((id,w))
     return doc_rel
 
-def optimals_parameters(bigram_q):
+def optimals_parameters(bigram_q, query_info):
     dicLapl = {k: [] for k in range(0,len(bigram_q))}
     dicInterp = {k: [] for k in range(0,len(bigram_q))}
     perplexity_Lapl = {k: [] for k in range(0, len(bigram_q))}
@@ -596,14 +588,14 @@ def optimals_parameters(bigram_q):
     with tqdm(total=(len(bigram_q)*9), file=sys.stdout) as pbar:
         pbar.write("Finding optimal parameters for queries...")
         for n in range(2 , 11, 1):
-            LM_coll = getLM_coll(n)
-            LM_d, remaining_doc = getLM_docs(n)
+            LM_coll = getLM_coll(n, query_info.doc_score, query_info.threshold)
+            LM_d, remaining_doc = getLM_docs(n, query_info.doc_score, query_info.threshold)
             #LAPLACE SMOOTHING
             for single_query in bigram_q:
                 scoreMLE = Laplace_smooth(LM_d, single_query)
                 lst_perplexity = []
                 for doc_LM, score_LM in scoreMLE.items():
-                    if doc_LM == id_doc:
+                    if doc_LM == query_obj.id_doc:
                         perplexity = (1/score_LM)**(1/len(single_query))
                         lst_perplexity.append((doc_LM, perplexity))
                 #doc_perpl = [(doc_id_target, score_target) for doc_id_target, score_target in lst_perplexity if doc_id_target == id_doc]
@@ -621,7 +613,7 @@ def optimals_parameters(bigram_q):
                 for k in np.arange(0.1, 1.1, 0.1):
                     scoreDc = LinInterp_Smooth(LM_d, single_query, lambda1, lambda2, LM_coll)
                     for doc_LM, score_LM in scoreDc.items():
-                        if doc_LM == id_doc:
+                        if doc_LM == query_obj.id_doc:
                             perplex = (1 / score_LM) ** (1 / len(single_query))
                             dic_perplexity_interp[(lambda1, lambda2)] = (doc_LM, perplex)
                     tmpInterp = sorted(scoreDc.items(), key=lambda x: -x[-1])
@@ -676,10 +668,10 @@ def optimals_parameters(bigram_q):
             pbar.update(1)
     return dit_ret
 
-def term_term_matrix():
+def term_term_matrix(query_info):
     print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
-    bigram_q = LM_query(query)
-    parameters = optimals_parameters([bigram_q])
+    bigram_q = LM_query(query_obj.query)
+    parameters = optimals_parameters([bigram_q], query_info)
     for k,v in parameters.items():
         if v[0][0] == "Laplacian":
             index = v[0][1]
@@ -688,7 +680,7 @@ def term_term_matrix():
             index = v[0][1]
             newRanking = v[0][5]
     #Co-Occurrence method
-    tokens = tokenizer.get_model()(query)
+    tokens = tokenizer.get_model()(query_obj.query)
     newRanking = list(newRanking)
     relevant_documents = []
     for i in range(0, index+1):
@@ -713,7 +705,7 @@ def term_term_matrix():
     max_value = term_term["count(w)"].max()
     return tokens, row_col, LM_coll, term_term, max_value
 
-print("Instructions: ", id_instr[id_doc])
+print("Instructions: ", id_instr[query_obj.id_doc])
 
 #create a equal dataframe to term_temr with PPMI values
 def pmi_matrix(row_col, LM_coll, term_term, max_value):
@@ -817,9 +809,9 @@ def query_expansion(tokens, dict_sorted):
                         final_queries.append(new_query)
     return final_queries
 
-def show_information_queries(final_queries):
+def show_information_queries(final_queries, query_info):
     print("Query generate: ", len(final_queries))
-    parameters = optimals_parameters([LM_query(q) for q in final_queries[:100]])
+    parameters = optimals_parameters([LM_query(q) for q in final_queries[:100]], query_info)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
@@ -871,41 +863,40 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Lambda1: ", informations[0][3],
                           " - Lambda2: ", informations[0][4])
 
-tokens, row_col, LM_coll, term_term, max_value = term_term_matrix()
+tokens, row_col, LM_coll, term_term, max_value = term_term_matrix(query_obj)
 Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
 dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
 final_queries = query_expansion(tokens, dict_sorted)
-parameters = show_information_queries(final_queries)
+parameters = show_information_queries(final_queries, query_obj)
 get_low_queries_perplexity(final_queries, parameters)
 
 
 def main():
-    tokenizer_name = 'keras'
-    principal_tokenizer = tokenizer(tokenizer_name)
-
-    # MAIN
-    category, query, folder, id_doc, idx_q = rnd_query()
-    queryCat = np.unique(category).tolist()
-    print("Query:", query)
-    print("Query idx: ", idx_q)
+    query_obj = rnd_query()
+    queryCat = np.unique(query_obj.category).tolist()
+    print("Query:", query_obj.query)
+    print("Query idx: ", query_obj.idx_q)
     print("Categories query: ", queryCat)
-    print("Id Doc: ", id_doc)
+    print("Id Doc: ", query_obj.id_doc)
 
     '''
     COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
     '''
     # MAIN
-    indexDoc_score = ranking(query)
+    tokenizer = Tokenizer()
+    tokenizer.set_name('keras')
+
+    indexDoc_score = ranking(query_obj.query, tokenizer)
 
     # useful for obtaining the filtered ranking
     doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(indexDoc_score[0]), key=lambda x: -x[-1])]
 
     # get the weight as threshold
-    threshold = [v for k, v in doc_score if k == id_doc][0]
+    threshold = [v for k, v in doc_score if k == query_obj.id_doc][0]
     print("Threshold/Score document: ", threshold)
 
     for (id, w) in doc_score:
-        if id == id_doc:
+        if id == query_obj.id_doc:
             print("Index with TFIDF: ", doc_score.index((id, w)))
 
 
