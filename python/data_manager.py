@@ -164,9 +164,9 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        #rnd = 34582 #Interpolation
+        rnd = 34582 #Interpolation
         #rnd = 11
-        rnd = 37384 #->0
+        #rnd = 37384 #->0
         #rnd = 16068
         #rnd = 13037
         #rnd = 39800
@@ -812,17 +812,22 @@ def query_expansion(tokens, dict_sorted):
 
 def show_information_queries(final_queries, query_info):
     print("Query generate: ", len(final_queries))
-    parameters = optimals_parameters([LM_query(q) for q in final_queries[:100]], query_info)
+    parameters = optimals_parameters([LM_query(q) for q in final_queries], query_info)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
-                print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
+                print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]][1], "\n") #get perplexity at specific skip-gram
             else:
                 perplexity_query = v[0][6]
                 score_w_intd = perplexity_query[v[0][2]-2]
-                print("Interpolation - Skip-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
+                min_perpl = max(score_w_intd.items(), key=lambda x:x[1])[1]
+                l1_l2 = max(score_w_intd.items(), key=lambda x:x[1])[0]
+                print("Interpolation - Skip-grams: ", v[0][2],
+                      " Lambda1: ", l1_l2[0],
+                      " Lambda2: ", l1_l2[1],
+                      " Perplexity: ", min_perpl[1], "\n")
     return parameters
 
 def get_low_queries_perplexity(final_queries, parameters):
@@ -857,12 +862,14 @@ def get_low_queries_perplexity(final_queries, parameters):
             for k_p_i, v_p_i in dictionary.items():
                 if v_p_i[1] == min_perpl:
                     informations = parameters[k_parameters]
+                    position = [elem for elem in informations[0][6] if min_perpl in list(elem[k_p_i])]
+                    idx_s_p = informations[0][6].index(position[0])
                     print("Query: ", final_queries[k_parameters],
                           " - Smoothing: ", informations[0][0],
                           " - Index: ", informations[0][1],
-                          " - Skip-grams: ", informations[0][2],
-                          " - Lambda1: ", informations[0][3],
-                          " - Lambda2: ", informations[0][4])
+                          " - Skip-grams: ", idx_s_p+2,
+                          " - Lambda1: ", k_p_i[0],
+                          " - Lambda2: ", k_p_i[1])
 
 tokens, row_col, LM_coll, term_term, max_value = term_term_matrix(query_obj)
 Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
