@@ -164,9 +164,9 @@ def rnd_query():
     while not category:
         #rnd = random.randint(0, len(data))
         #rnd = 48566
-        rnd = 34582 #Interpolation
+        #rnd = 34582 #Interpolation
         #rnd = 11
-        #rnd = 37384 ->0
+        rnd = 37384 #->0
         #rnd = 16068
         #rnd = 13037
         #rnd = 39800
@@ -785,7 +785,7 @@ def query_expansion(tokens, dict_sorted):
     for i in range (idx+1, len(all_query.keys())):
         #copia delle prime query
         if not tmp_list_queries:
-            temp = first_queries.copy()
+            temp = first_queries.copy() #queries della prima parola
         else:
             temp = tmp_list_queries.copy()
         if len(dict_sorted_update[tokens[i]])>=10:
@@ -794,15 +794,16 @@ def query_expansion(tokens, dict_sorted):
             tq_w = dict_sorted_update[tokens[i]].copy()
         if not tq_w:
             break
+        tmp_list_queries = []
         for single_query in temp:
             #tokenizzo la single_query
             tks_query = tokenizer.get_model()(single_query)
             #t = co-occurrence word, w: weight
             for (t,w) in tq_w:
                 if w>0:
-                    query_copy = tks_query.copy() #10
-                    idx = query_copy.index(tokens[i])
-                    query_copy.insert(idx+1,t)
+                    query_copy = tks_query.copy()
+                    indx = query_copy.index(tokens[i])
+                    query_copy.insert(indx+1,t)
                     new_query = ' '.join(query_copy)
                     tmp_list_queries.append(new_query)
                     if i == len(all_query.keys())-1:
@@ -817,11 +818,11 @@ def show_information_queries(final_queries, query_info):
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
-                print("Laplacian - N-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
+                print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1]) #get perplexity at specific skip-gram
             else:
                 perplexity_query = v[0][6]
                 score_w_intd = perplexity_query[v[0][2]-2]
-                print("Interpolation - N-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
+                print("Interpolation - Skip-grams: ", v[0][2], " Perplexity: ", min(score_w_intd.items(), key=lambda x:x[1])[1][1])
     return parameters
 
 def get_low_queries_perplexity(final_queries, parameters):
