@@ -188,6 +188,7 @@ def rnd_query():
     return query_obj
 
 #MAIN
+###############################################################################################
 query_obj = rnd_query()
 print("Query:", query_obj.query)
 print("Query idx: ", query_obj.index)
@@ -197,13 +198,10 @@ print("Id Doc: ", query_obj.id_doc)
 '''
 COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
 '''
-#MAIN
 tokenizer = Tokenizer()
 tokenizer.set_name('keras')
 
 ranking(query_obj, tokenizer)
-
-#useful for obtaining the filtered ranking
 
 #get the weight as threshold
 print("Threshold/Score document: ", query_obj.threshold)
@@ -211,11 +209,13 @@ print("Threshold/Score document: ", query_obj.threshold)
 for (id,w) in query_obj.doc_score:
     if id == query_obj.id_doc:
         print("Index with TFIDF: ", query_obj.doc_score.index((id,w)))
+        
+###############################################################################################
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
 '''
-def search_DocCategories(thr, doc_score):
+def search_DocCategories(thr, doc_score): #SERVE?
     data = pd.read_pickle("./OriginalRecipes.pkl")
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
@@ -240,10 +240,6 @@ def search_DocCategories(thr, doc_score):
     return cat_not_empty, cat_some_empty
 
 #docCat , docCat_some_empty= search_DocCategories(query_obj.threshold[0], query_obj.doc_score)
-
-relevant = [k[0] for k, i in query_obj.doc_score if i >= query_obj.threshold]
-docCat_some_empty = data[data['id'].isin(relevant)]
-docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
 
 '''
 SEARCH CATEGORY CORRESPONDENCE - 1st METHOD
@@ -296,6 +292,11 @@ def getPred(estimate, title, lstDoc, categories, query):
     #plot(precision, recall, title, query.query)
     return avgP
 
+#MAIN
+###############################################################################################
+docCat_some_empty = data[data['id'].isin(query_obj.relevant_ranking_tfidf())]
+docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
+
 #1. DOCUMENTS WITHOUT ENTITIES = 1
 estimate = 1
 title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
@@ -312,6 +313,7 @@ print("AVG UNDERESTIMATE: ", avgp)
 title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
 avgp = getPred(estimate, title, docCat, query_obj.categories, query_obj)
 print("AVG DISCARD: ", avgp)
+###############################################################################################
 
 
 '''
@@ -355,9 +357,6 @@ def getEntitiesDoc_USDA():
                 docCat_some_empty.at[idx[0], 'USDA'] = lst_categories
     return docCat_some_empty
 
-#nuovo dataframe contenete le categorie di USDA e del web scraping
-#docCat_some_empty.to_pickle("./some_empty_USDA.pkl")
-
 # get query category from USDA
 def getEntitiesQuery_USDA(id_doc):
     q = data.iloc[id_doc]['Query']
@@ -374,8 +373,6 @@ def getEntitiesQuery_USDA(id_doc):
 #categorie ingredienti query
 #lst_ingr_q_USDA = getEntitiesQuery_USDA(query_obj.id_doc)
 
-lst_ingr_q_USDA = data.iloc[query_obj.index]['USDA']
-
 def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
     all_cat_query = query_info.categories+lst_ingr_q_USDA
     title = 'DOCUMENTS WITH MIXED ENTITIES (SCRAPE+USDA)'
@@ -385,15 +382,18 @@ def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
     avgp = getPred(0, title, datatemp, all_cat_query, query_info)
     return avgp
 
-#attivare questo
+#MAIN
+###############################################################################################
+lst_ingr_q_USDA = data.iloc[query_obj.index]['USDA']
 avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_obj)
 print("Avg MIXED: ", avgp)
+###############################################################################################
 '''
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
 '''
 doc_USDAEntity = {}
-def only_USDA(query):
+def only_USDA(query): #SERVE?
     with tqdm(total=sum(i >= query.threshold for k,i in query.doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
         for doc_id, score in query.doc_score:
@@ -421,10 +421,11 @@ def plot_only_USDA(query):
     avgP = (delta * (list(reversed(precision))[:-1])).sum()
     return avgP
 
-#attivare questo
+#MAIN
+###############################################################################################
 avgP = plot_only_USDA(query_obj)
 print("Avg only USDA: ", avgP)
-
+###############################################################################################
 '''
 PCA
 '''
@@ -447,6 +448,8 @@ def showPCA(query_info, all_relevant_documents):
     #plt.savefig('imgs/'+folder+'PCA')
     plt.show()
 
+#MAIN
+###############################################################################################
 with open('id_instructions.pkl', 'rb') as f:
     id_instr = pickle.load(f)
 all_relevant_documents = []
@@ -455,6 +458,7 @@ for doc_id, score in query_obj.doc_score:
         all_relevant_documents.append(id_instr[doc_id[0]])
 if len(all_relevant_documents)>1:
     showPCA(query_obj, all_relevant_documents)
+###############################################################################################
 
 ''''
 LANGUAGE MODEL
@@ -470,6 +474,8 @@ def skip(sequence, s=2):
     return k_grams
 
 def getLM_docs(step, documents, thr):
+    with open('id_instructions.pkl', 'rb') as f:
+        id_instr = pickle.load(f)
     LMs_doc = {}
     ranking_id = []
     for doc, score in documents:
@@ -556,6 +562,8 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
 
 #LM of entire collection
 def getLM_coll(step, documents, thr):
+    with open('id_instructions.pkl', 'rb') as f:
+        id_instr = pickle.load(f)
     LM_coll = defaultdict(lambda: defaultdict(lambda: 0))
     for doc, score in documents:
         if score>=thr:
@@ -705,7 +713,10 @@ def term_term_matrix(query_info):
     max_value = term_term["count(w)"].max()
     return tokens, row_col, LM_coll, term_term, max_value
 
+#MAIN
+###############################################################################################
 print("Instructions: ", id_instr[query_obj.id_doc])
+###############################################################################################
 
 #create a equal dataframe to term_temr with PPMI values
 def pmi_matrix(row_col, LM_coll, term_term, max_value):
@@ -871,12 +882,15 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Lambda1: ", k_p_i[0],
                           " - Lambda2: ", k_p_i[1])
 
+#MAIN
+###############################################################################################
 tokens, row_col, LM_coll, term_term, max_value = term_term_matrix(query_obj)
 Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
 dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
 final_queries = query_expansion(tokens, dict_sorted)
 parameters = show_information_queries(final_queries, query_obj)
 get_low_queries_perplexity(final_queries, parameters)
+###############################################################################################
 
 
 def main():
@@ -907,7 +921,50 @@ def main():
         if id == query_obj.id_doc:
             print("Index with TFIDF: ", doc_score.index((id, w)))
 
+    docCat_some_empty = data[data['id'].isin(query_obj.relevant_ranking_tfidf())]
+    docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len() > 0]
 
+    # 1. DOCUMENTS WITHOUT ENTITIES = 1
+    estimate = 1
+    title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
+    avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
+    print("AVG OVERESTIMATED: ", avgp)
+
+    # 2. DOCUMENTS WITHOUT ENTITIES = 0
+    estimate = 0
+    title = 'UNDERESTIMATE SCRAPED ENTITIES = 0'
+    avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
+    print("AVG UNDERESTIMATE: ", avgp)
+
+    # 3. DISCARD DOCUMENTS WITHOUT ENTITIES
+    title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
+    avgp = getPred(estimate, title, docCat, query_obj.categories, query_obj)
+    print("AVG DISCARD: ", avgp)
+
+    lst_ingr_q_USDA = data.iloc[query_obj.index]['USDA']
+    avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_obj)
+    print("Avg MIXED: ", avgp)
+
+    avgP = plot_only_USDA(query_obj)
+    print("Avg only USDA: ", avgP)
+
+    with open('id_instructions.pkl', 'rb') as f:
+        id_instr = pickle.load(f)
+    all_relevant_documents = []
+    for doc_id, score in query_obj.doc_score:
+        if score >= query_obj.threshold:
+            all_relevant_documents.append(id_instr[doc_id[0]])
+    if len(all_relevant_documents) > 1:
+        showPCA(query_obj, all_relevant_documents)
+
+    print("Instructions: ", id_instr[query_obj.id_doc])
+
+    tokens, row_col, LM_coll, term_term, max_value = term_term_matrix(query_obj)
+    Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
+    dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
+    final_queries = query_expansion(tokens, dict_sorted)
+    parameters = show_information_queries(final_queries, query_obj)
+    get_low_queries_perplexity(final_queries, parameters)
 
 
 if __name__ == "__main__":

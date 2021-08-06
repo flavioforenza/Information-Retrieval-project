@@ -12,4 +12,7 @@ class Query:
     def set_threshold(self, threshold):
         self.threshold = threshold
 
+    def relevant_ranking_tfidf(self):
+        return [k[0] for k, i in self.doc_score if i >= self.threshold]
+
 
