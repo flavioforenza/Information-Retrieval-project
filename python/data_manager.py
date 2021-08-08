@@ -25,7 +25,6 @@ from query import Query
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
-data.index = range(0,len(data))
 categories = ['main course', 'snack', 'soup', 'beverage', 'soup', 'stew', 'bread', 'salad', 'appetizer', 'side dish', 'dessert']
 db = pymongo.MongoClient()["MIT"]["Recipes1M+"]
 sp = spacy.load('en_core_web_sm')
@@ -120,7 +119,7 @@ def ranking(query_info, tokenizer):
     q = vectorizer.transform([query_info.query])
     #dict of relevant documents and scores
     doc_score = cosine_similarity(q, docs)
-    doc_score = [(data.loc[[i]]['id'].values, w) for i, w in sorted(enumerate(doc_score[0]), key=lambda x: -x[-1])]
+    doc_score = [(data.iloc[[i]]['id'].values, w) for i, w in sorted(enumerate(doc_score[0]), key=lambda x: -x[-1])]
     query_info.set_ranking(doc_score)
     threshold = [v for k, v in doc_score if k == query_info.id_doc][0]
     query_info.set_threshold(threshold)
@@ -163,8 +162,11 @@ def rnd_query():
     print("Looking for a query...")
     while not category:
         #rnd = random.randint(0, len(data))
+        rnd = 15361
+        #rnd = 9107 #different perplexity change index
+        #rnd = 1028
         #rnd = 48566
-        rnd = 34582 #Interpolation
+        #rnd = 34582 #Interpolation
         #rnd = 11
         #rnd = 37384 #->0
         #rnd = 16068
@@ -392,8 +394,9 @@ def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
 '''
-doc_USDAEntity = {}
+
 def only_USDA(query): #SERVE?
+    doc_USDAEntity = {}
     with tqdm(total=sum(i >= query.threshold for k,i in query.doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
         for doc_id, score in query.doc_score:
@@ -404,7 +407,7 @@ def only_USDA(query): #SERVE?
                 entities = get_entities_USDA(ingredients[0])
                 doc_USDAEntity[doc_id[0]] = entities
                 pbar.update(1)
-
+    return doc_USDAEntity
 #attivare questo
 #only_USDA()
 
@@ -412,7 +415,6 @@ def plot_only_USDA(query, lst_ingr_q_USDA, docCat_some_empty):
     #remove warning numpy
     np.warnings.filterwarnings('ignore', category=np.VisibleDeprecationWarning)
     y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(docCat_some_empty['USDA'].values), 0)
-    #y_pred = getCatCorrispondece(lst_ingr_q_USDA, list(doc_USDAEntity.values()), 0)
     d_score = [i for k,i in query.doc_score if i>=query.threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
@@ -575,7 +577,7 @@ def getLM_coll(step, documents, thr, tokenizer):
                     LM_coll[a][b] += 1
     return LM_coll
 
-def LM_query(q, tokenizer):
+def bigram_query(q, tokenizer):
     tokens = tokenizer.get_model()(q)
     tokens = ["#S"] + tokens + ["#E"]
     bigram = list(ngrams(tokens, 2))
@@ -677,8 +679,8 @@ def optimals_parameters(bigram_q, query_info, tokenizer):
     return dit_ret
 
 def term_term_matrix(query_info, tokenizer):
-    print("§§§§§§§§§§§§§§§§ COMPUTE PPMI VALUE §§§§§§§§§§§§§§§§")
-    bigram_q = LM_query(query_info.query, tokenizer)
+    print("§§§§§§§§§§§§§§§§ COMPUTE PPMI §§§§§§§§§§§§§§§§")
+    bigram_q = bigram_query(query_info.query, tokenizer)
     parameters = optimals_parameters([bigram_q], query_info, tokenizer)
     for k,v in parameters.items():
         if v[0][0] == "Laplacian":
@@ -823,7 +825,7 @@ def query_expansion(tokens, dict_sorted, tokenizer):
 
 def show_information_queries(final_queries, query_info, tokenizer):
     print("Query generate: ", len(final_queries))
-    parameters = optimals_parameters([LM_query(q, tokenizer) for q in final_queries], query_info, tokenizer)
+    parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries[:100]], query_info, tokenizer)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
@@ -858,7 +860,7 @@ def get_low_queries_perplexity(final_queries, parameters):
                     min_perpl = v_p_i[1]
 
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print("Queries with Perplexity: ", min_perpl)
+    print("Queries with lowest Perplexity: ", min_perpl)
     for (k_parameters, perpl) in all_dict_perpl_lapl:
         for (id_doc_p, score_p) in perpl:
             if score_p == min_perpl:

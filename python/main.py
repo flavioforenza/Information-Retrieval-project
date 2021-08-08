@@ -4,7 +4,6 @@ from tokenizers import Tokenizer
 import pandas as pd
 import pickle
 
-
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
 
 #1. Select a random query
