@@ -161,8 +161,10 @@ def rnd_query():
     category = []
     print("Looking for a query...")
     while not category:
-        #rnd = random.randint(0, len(data))
-        rnd = 15361
+        rnd = random.randint(0, len(data))
+        #rnd = 14989
+        #rnd = 11562
+        #rnd = 15361
         #rnd = 9107 #different perplexity change index
         #rnd = 1028
         #rnd = 48566
@@ -188,31 +190,6 @@ def rnd_query():
     #folder = ''
     #folder = 'imgs/query' + str(rnd) + 'thr10'
     return query_obj
-
-#MAIN
-###############################################################################################
-#query_obj = rnd_query()
-# print("Query:", query_obj.query)
-# print("Query idx: ", query_obj.index)
-# print("Categories query: ", query_obj.categories)
-# print("Id Doc: ", query_obj.id_doc)
-
-'''
-COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
-'''
-# tokenizer = Tokenizer()
-# tokenizer.set_name('keras')
-#
-# ranking(query_obj, tokenizer)
-#
-# #get the weight as threshold
-# print("Threshold/Score document: ", query_obj.threshold)
-#
-# for (id,w) in query_obj.doc_score:
-#     if id == query_obj.id_doc:
-#         print("Index with TFIDF: ", query_obj.doc_score.index((id,w)))
-        
-###############################################################################################
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
@@ -294,30 +271,6 @@ def getPred(estimate, title, lstDoc, categories, query):
     #plot(precision, recall, title, query.query)
     return avgP
 
-#MAIN
-###############################################################################################
-# docCat_some_empty = data[data['id'].isin(query_obj.relevant_ranking_tfidf())]
-# docCat = docCat_some_empty[docCat_some_empty['Scrape'].str.len()>0]
-#
-# #1. DOCUMENTS WITHOUT ENTITIES = 1
-# estimate = 1
-# title = 'OVERESTIMATED SCRAPED ENTITIES = 1'
-# avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
-# print("AVG OVERESTIMATED: ", avgp)
-#
-# #2. DOCUMENTS WITHOUT ENTITIES = 0
-# estimate = 0
-# title = 'UNDERESTIMATE SCRAPED ENTITIES = 0'
-# avgp = getPred(estimate, title, docCat_some_empty, query_obj.categories, query_obj)
-# print("AVG UNDERESTIMATE: ", avgp)
-#
-# #3. DISCARD DOCUMENTS WITHOUT ENTITIES
-# title = 'DISCARD DOCUMENTS WITHOUT ENTITIES'
-# avgp = getPred(estimate, title, docCat, query_obj.categories, query_obj)
-# print("AVG DISCARD: ", avgp)
-###############################################################################################
-
-
 '''
 SEARCH CATEGORY CORRESPONDENCE - 2nd METHOD
 --- USE MIXED ENTITIES (SCRAPE_SCHEMA_RECIPE+USDA DATABASE) ---
@@ -384,12 +337,6 @@ def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
     avgp = getPred(0, title, datatemp, all_cat_query, query_info)
     return avgp
 
-#MAIN
-###############################################################################################
-# lst_ingr_q_USDA = data.iloc[query_obj.index]['USDA']
-# avgp = evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_obj)
-# print("Avg MIXED: ", avgp)
-###############################################################################################
 '''
 SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
@@ -408,7 +355,6 @@ def only_USDA(query): #SERVE?
                 doc_USDAEntity[doc_id[0]] = entities
                 pbar.update(1)
     return doc_USDAEntity
-#attivare questo
 #only_USDA()
 
 def plot_only_USDA(query, lst_ingr_q_USDA, docCat_some_empty):
@@ -423,11 +369,6 @@ def plot_only_USDA(query, lst_ingr_q_USDA, docCat_some_empty):
     avgP = (delta * (list(reversed(precision))[:-1])).sum()
     return avgP
 
-#MAIN
-###############################################################################################
-# avgP = plot_only_USDA(query_obj, lst_ingr_q_USDA, docCat_some_empty)
-# print("Avg only USDA: ", avgP)
-###############################################################################################
 '''
 PCA
 '''
@@ -449,18 +390,6 @@ def showPCA(query_info, all_relevant_documents, tokenizer):
     plt.legend()
     #plt.savefig('imgs/'+folder+'PCA')
     plt.show()
-
-#MAIN
-###############################################################################################
-# with open('id_instructions.pkl', 'rb') as f:
-#     id_instr = pickle.load(f)
-# all_relevant_documents = []
-# for doc_id, score in query_obj.doc_score:
-#     if score >= query_obj.threshold:
-#         all_relevant_documents.append(id_instr[doc_id[0]])
-# if len(all_relevant_documents)>1:
-#     showPCA(query_obj, all_relevant_documents, tokenizer)
-###############################################################################################
 
 ''''
 LANGUAGE MODEL
@@ -715,11 +644,6 @@ def term_term_matrix(query_info, tokenizer):
     max_value = term_term["count(w)"].max()
     return tokens, row_col, LM_coll, term_term, max_value
 
-#MAIN
-###############################################################################################
-#print("Instructions: ", id_instr[query_obj.id_doc])
-###############################################################################################
-
 #create a equal dataframe to term_temr with PPMI values
 def pmi_matrix(row_col, LM_coll, term_term, max_value):
     pmi_matrix = pd.DataFrame(columns= row_col, index=row_col)
@@ -788,6 +712,8 @@ def query_expansion(tokens, dict_sorted, tokenizer):
                 break
     for k,v in all_query.items():
         print(len(v))
+    if len(all_query) == 1:
+        return all_query
     idx = 0
     first_queries = all_query[tokens[idx]].copy()
     while not first_queries:
@@ -825,7 +751,7 @@ def query_expansion(tokens, dict_sorted, tokenizer):
 
 def show_information_queries(final_queries, query_info, tokenizer):
     print("Query generate: ", len(final_queries))
-    parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries[:100]], query_info, tokenizer)
+    parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries], query_info, tokenizer)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
@@ -883,16 +809,6 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Skip-grams: ", idx_s_p+2,
                           " - Lambda1: ", k_p_i[0],
                           " - Lambda2: ", k_p_i[1])
-
-#MAIN
-###############################################################################################
-# tokens, row_col, LM_coll, term_term, max_value = term_term_matrix(query_obj, tokenizer)
-# Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
-# dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
-# final_queries = query_expansion(tokens, dict_sorted, tokenizer)
-# parameters = show_information_queries(final_queries, query_obj)
-# get_low_queries_perplexity(final_queries, parameters)
-###############################################################################################
 
 
 def main():
