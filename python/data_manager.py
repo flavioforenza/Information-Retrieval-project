@@ -162,6 +162,8 @@ def rnd_query():
     print("Looking for a query...")
     while not category:
         rnd = random.randint(0, len(data))
+        #rnd = 22319
+        #rnd = 26424
         #rnd = 14989
         #rnd = 11562
         #rnd = 15361
@@ -757,7 +759,8 @@ def show_information_queries(final_queries, query_info, tokenizer):
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
-                print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]][1], "\n") #get perplexity at specific skip-gram
+                print("v:", v[0][2])
+                print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1], "\n") #get perplexity at specific skip-gram
             else:
                 perplexity_query = v[0][6]
                 score_w_intd = perplexity_query[v[0][2]-2]

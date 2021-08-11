@@ -6,21 +6,24 @@ import pickle
 
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
 
+threshold = 0
 #1. Select a random query
-query_obj = dm.rnd_query()
-queryCat = np.unique(query_obj.categories).tolist()
-print("Query:", query_obj.query)
-print("Query idx: ", query_obj.index)
-print("Categories query: ", queryCat)
-print("Id Doc: ", query_obj.id_doc)
+while threshold<0.10:
+    query_obj = dm.rnd_query()
+    queryCat = np.unique(query_obj.categories).tolist()
+    print("Query:", query_obj.query)
+    print("Query idx: ", query_obj.index)
+    print("Categories query: ", queryCat)
+    print("Id Doc: ", query_obj.id_doc)
 
-#2. Choice of Tokenizer
-tokenizer = Tokenizer()
-tokenizer.set_name('keras')
+    #2. Choice of Tokenizer
+    tokenizer = Tokenizer()
+    tokenizer.set_name('keras')
 
-#3. Compute Tf-Idf-Vectorize and Cosine similarity
-dm.ranking(query_obj, tokenizer)
-print("Threshold/Score document: ", query_obj.threshold)
+    #3. Compute Tf-Idf-Vectorize and Cosine similarity
+    dm.ranking(query_obj, tokenizer)
+    threshold = query_obj.threshold
+    print("Threshold/Score document: ", query_obj.threshold)
 
 #4. Show index of document target
 for (id, w) in query_obj.doc_score:
