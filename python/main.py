@@ -6,6 +6,9 @@ import pickle
 
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
 
+dm.plot_statistic('totInstructions')
+dm.plot_statistic('totIngredients')
+
 threshold = 0
 #1. Select a random query
 while threshold<0.10:

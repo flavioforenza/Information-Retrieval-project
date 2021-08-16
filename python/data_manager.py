@@ -5,6 +5,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import warnings
 import pymongo
 import requests
 import scrape_schema_recipe as scr
@@ -57,14 +58,15 @@ def counter(column):
 #data.to_pickle("recipes.pkl")
 
 def plot_statistic(column):
-    fix, ax = plt.subplots(1,3 , figsize=(10,5))
+    warnings.filterwarnings("ignore")
+    fix, ax = plt.subplots(1, 3, figsize=(10,5))
     sns.distplot(data[column].values, axlabel= column, kde= False, ax=ax[0])
     sns.distplot(data[column].values, axlabel= column, kde=True, ax=ax[1])
     bplt = sns.boxplot(data=data[column].values, linewidth=1, ax=ax[2])
     bplt.set_ylabel(column)
     plt.tight_layout()
     # plt.savefig('imgs/statistic' + column)
-    # plt.show()
+    plt.show()
 
 #drop stop_words, punctuation and apply lemmatization
 def clean_normalize(phrase):
@@ -162,6 +164,7 @@ def rnd_query():
     print("Looking for a query...")
     while not category:
         rnd = random.randint(0, len(data))
+        #rnd = 32885
         #rnd = 22319
         #rnd = 26424
         #rnd = 14989
@@ -270,7 +273,7 @@ def getPred(estimate, title, lstDoc, categories, query):
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
-    #plot(precision, recall, title, query.query)
+    plot(precision, recall, title, query)
     return avgP
 
 '''
@@ -349,7 +352,6 @@ def only_USDA(query): #SERVE?
     with tqdm(total=sum(i >= query.threshold for k,i in query.doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
         for doc_id, score in query.doc_score:
-            #print("Entity search: document #", doc_id[0])
             if score >= query.threshold:
                 row = (data.loc[data['id'] == doc_id[0]])
                 ingredients = row['ingredients'].values
@@ -366,7 +368,7 @@ def plot_only_USDA(query, lst_ingr_q_USDA, docCat_some_empty):
     d_score = [i for k,i in query.doc_score if i>=query.threshold]
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     title = 'ENTITIES FROM USDA DATABASE ONLY'
-    #plot(precision, recall, title)
+    plot(precision, recall, title, query)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta * (list(reversed(precision))[:-1])).sum()
     return avgP
@@ -714,14 +716,16 @@ def query_expansion(tokens, dict_sorted, tokenizer):
                 break
     for k,v in all_query.items():
         print(len(v))
+    final_queries = []
     if len(all_query) == 1:
-        return all_query
+        for k,v in all_query.items():
+            final_queries.append(v)
+        return final_queries[0]
     idx = 0
     first_queries = all_query[tokens[idx]].copy()
     while not first_queries:
         idx+=1
         first_queries = all_query[tokens[idx]]
-    final_queries = []
     tmp_list_queries = []
     for i in range (idx+1, len(all_query.keys())):
         #copia delle prime query
@@ -753,13 +757,12 @@ def query_expansion(tokens, dict_sorted, tokenizer):
 
 def show_information_queries(final_queries, query_info, tokenizer):
     print("Query generate: ", len(final_queries))
-    parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries], query_info, tokenizer)
+    parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries[:100]], query_info, tokenizer)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
-                print("v:", v[0][2])
                 print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1], "\n") #get perplexity at specific skip-gram
             else:
                 perplexity_query = v[0][6]
@@ -812,7 +815,6 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Skip-grams: ", idx_s_p+2,
                           " - Lambda1: ", k_p_i[0],
                           " - Lambda2: ", k_p_i[1])
-
 
 def main():
     query_obj = rnd_query()
