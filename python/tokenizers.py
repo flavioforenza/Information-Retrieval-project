@@ -17,7 +17,7 @@ class Tokenizer:
     def set_name(self, name):
         self.name = name
 
-    def spacy_tokenizer(text=None):
+    def spacy_tokenizer(self, text=None):
         if text == None:
             return 0
         tokens = []
@@ -26,7 +26,7 @@ class Tokenizer:
             tokens.append(token.text)
         return tokens
 
-    def gensim_tokenizer(text=None):
+    def gensim_tokenizer(self, text=None):
         if text == None:
             return 0
         tokens = []

@@ -3,6 +3,7 @@ import numpy as np
 from tokenizers import Tokenizer
 import pandas as pd
 import pickle
+import os
 
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
 
@@ -11,17 +12,24 @@ dm.plot_statistic('totIngredients')
 
 threshold = 0
 #1. Select a random query
-while threshold<0.10:
+while threshold<0.20:
     query_obj = dm.rnd_query()
     queryCat = np.unique(query_obj.categories).tolist()
     print("Query:", query_obj.query)
     print("Query idx: ", query_obj.index)
     print("Categories query: ", queryCat)
     print("Id Doc: ", query_obj.id_doc)
+    path = '/Users/flavioforenza/Desktop/PCA_IR/'+str(query_obj.index)
+    try:
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
 
     #2. Choice of Tokenizer
     tokenizer = Tokenizer()
-    tokenizer.set_name('keras')
+    tokenizer.set_name('gensim')
 
     #3. Compute Tf-Idf-Vectorize and Cosine similarity
     dm.ranking(query_obj, tokenizer)
@@ -71,9 +79,10 @@ with open('id_instructions.pkl', 'rb') as f:
 all_relevant_documents = []
 for doc_id, score in query_obj.doc_score:
     if score >= query_obj.threshold:
-        all_relevant_documents.append(id_instr[doc_id[0]])
+        all_relevant_documents.append((doc_id[0],id_instr[doc_id[0]]))
 if len(all_relevant_documents) > 1:
-    dm.showPCA(query_obj, all_relevant_documents, tokenizer)
+    #list_relev_doc = [text for (id,text) in all_relevant_documents]
+    dm.showPCA(query_obj, all_relevant_documents, tokenizer, query_obj.index)
 
 ############## QUERY EXPANSION ##############
 
@@ -96,7 +105,7 @@ final_queries = dm.query_expansion(tokens, dict_sorted, tokenizer)
 
 #12. SHOW INFORMATON ABOUT EACH QUERY:
 # QUERY - POSITION DOCUMENT TARGET - BEST SMOOTHING METHOD - SKIP-GRAM - PERPLEXITY
-parameters = dm.show_information_queries(final_queries, query_obj, tokenizer)
+parameters, queries_low_distance = dm.show_information_queries(final_queries, query_obj, tokenizer, all_relevant_documents, query_obj.id_doc)
 
 #13. RETURN THE LIST OF QUERIES WITH THE LOWEST PERPLEXITY
 dm.get_low_queries_perplexity(final_queries, parameters)

@@ -2,12 +2,14 @@ import random
 import pickle
 import string
 import sys
+import os
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import warnings
 import pymongo
 import requests
+import scipy.spatial.distance
 import scrape_schema_recipe as scr
 import seaborn as sns
 import spacy
@@ -22,7 +24,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tqdm import tqdm
 from usda.client import UsdaClient
 from tokenizers import Tokenizer
-from query import Query
+from query import *
 
 key_USDA = UsdaClient('F8TD5aG6YzDftMjk97xlAVNHnhRrnsFxSD94CRGY')
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
@@ -65,7 +67,7 @@ def plot_statistic(column):
     bplt = sns.boxplot(data=data[column].values, linewidth=1, ax=ax[2])
     bplt.set_ylabel(column)
     plt.tight_layout()
-    # plt.savefig('imgs/statistic' + column)
+    #plt.savefig('imgs/statistic' + column)
     plt.show()
 
 #drop stop_words, punctuation and apply lemmatization
@@ -117,6 +119,8 @@ def ranking(query_info, tokenizer):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
     vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
+    #pr = id_instr.values()
+    #dc = vectorizer.fit_transform('ciao come ti senti?')
     docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query_info.query])
     #dict of relevant documents and scores
@@ -163,7 +167,17 @@ def rnd_query():
     category = []
     print("Looking for a query...")
     while not category:
-        rnd = random.randint(0, len(data))
+        #rnd = random.randint(0, len(data))
+        #rnd = 13965
+        #rnd = 21658
+        #rnd = 7489
+        #rnd = 21658
+        #rnd = 34582
+        #rnd = 21933
+        #rnd = 2820 q->0 !!!!!
+        #rnd = 38241
+        #rnd = 6807
+        #rnd = 43755
         #rnd = 32885
         #rnd = 22319
         #rnd = 26424
@@ -174,7 +188,7 @@ def rnd_query():
         #rnd = 1028
         #rnd = 48566
         #rnd = 34582 #Interpolation
-        #rnd = 11
+        rnd = 11
         #rnd = 37384 #->0
         #rnd = 16068
         #rnd = 13037
@@ -260,8 +274,9 @@ def plot(precision, recall, title, query_obj):
     ax2.set_xlabel('Interpolated Recall')
     ax2.set_ylabel('Precision')
     plt.figtext(.5,.90,'thr='+str(query_obj.threshold)+ '    ' + 'query: ' + query_obj.query,fontsize=10,ha='center')
-    #plt.savefig('imgs/'+ folder +'.png')
+    #plt.savefig('/Users/flavioforenza/Desktop/PR/'+str(query_obj.index)+' '+title)
     plt.show()
+    plt.clf()
 
 '''
 3 ONLY WITH SCRAPE_SCHEMA_RECIPE API
@@ -377,23 +392,36 @@ def plot_only_USDA(query, lst_ingr_q_USDA, docCat_some_empty):
 PCA
 '''
 
-def showPCA(query_info, all_relevant_documents, tokenizer):
-    #all_relevant_queries = list(itertools.chain.from_iterable(i for i in all_relevant_queries))
+def showPCA(query, all_relevant_documents, tokenizer, idx_q):
+    ist_relev_doc = [text for (id, text) in all_relevant_documents]
     vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
-    documents = vectorizer.fit_transform(all_relevant_documents)
-    qr = vectorizer.transform([query_info.query])
+    documents = vectorizer.fit_transform(ist_relev_doc)
+    qr = vectorizer.transform([query.query])
     pca = PCA(n_components=2)
     v_docs = pca.fit_transform(documents.toarray())
     v_query = pca.transform(qr.toarray())
-    #prendi le entità di tutti i documenti ed enumerali
-    plt.scatter(v_docs[:, 0], v_docs[:, 1], edgecolor='none', alpha=0.5,
+
+    XA = np.array(v_docs[-1]).reshape(1, -1)
+    XB = np.array(v_query[0]).reshape(1, -1)
+    distance = round(scipy.spatial.distance.cdist(XA, XB, 'euclidean')[0][0], 2)
+    query.set_distance(distance)
+    #print("Query: ", query.query, " Distance: ", distance)
+
+    LABEL_COLOR_MAP = {0: 'red',
+                       1: 'orange',
+                       2: 'blue'}
+    plt.scatter(v_docs[:, 0], v_docs[:, 1], c = LABEL_COLOR_MAP[2], marker='o', alpha=0.5,
                 cmap=plt.cm.get_cmap('Accent', 10), label = 'Documents')
-    plt.scatter(v_query[:, 0], v_query[:, 1], edgecolor='none', marker='*',
-                cmap=plt.cm.get_cmap('Paired', 10), label = 'Query', s=300)
-    plt.title('PCA' + '    thr='+str(query_info.threshold)+ '    ' + 'query: ' + query_info.query)
+    plt.scatter(v_docs[:, 0][-1], v_docs[:, 1][-1], c=LABEL_COLOR_MAP[0], marker='D',
+                cmap=plt.cm.get_cmap('Accent', 10), label='Doc. Target', s=100)
+    plt.scatter(v_query[:, 0], v_query[:, 1], c=LABEL_COLOR_MAP[1], marker='*',
+                cmap=plt.cm.get_cmap('Paired', 10), label = 'Query', s=250)
+
+    plt.title('Query: ' + query.query)
     plt.legend()
-    #plt.savefig('imgs/'+folder+'PCA')
+    #plt.savefig('/Users/flavioforenza/Desktop/PCA_IR/'+ str(idx_q) +'/'+str(query.distance)+ ' ' + str(query.new) +'.png')
     plt.show()
+    plt.clf()
 
 ''''
 LANGUAGE MODEL
@@ -755,12 +783,22 @@ def query_expansion(tokens, dict_sorted, tokenizer):
                         final_queries.append(new_query)
     return final_queries
 
-def show_information_queries(final_queries, query_info, tokenizer):
+def show_information_queries(final_queries, query_info, tokenizer, list_relev_doc, id_target):
     print("Query generate: ", len(final_queries))
     parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries[:100]], query_info, tokenizer)
+    queries_low_distance = []
+    with tqdm(total=len(final_queries), file=sys.stdout) as pbar:
+        pbar.write("Computation of the distance between the queries and the target document.")
+        for qry in final_queries:
+            q = new_Query(qry)
+            showPCA(q, list_relev_doc, tokenizer, query_info.index)
+            if q.distance <= query_info.distance:
+                queries_low_distance.append(q)
+            pbar.update(1)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
+            #showPCA(final_queries[k], list_relev_doc, tokenizer)
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
                 print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1], "\n") #get perplexity at specific skip-gram
@@ -773,7 +811,7 @@ def show_information_queries(final_queries, query_info, tokenizer):
                       " Lambda1: ", l1_l2[0],
                       " Lambda2: ", l1_l2[1],
                       " Perplexity: ", min_perpl[1], "\n")
-    return parameters
+    return parameters, queries_low_distance
 
 def get_low_queries_perplexity(final_queries, parameters):
     all_dict_perpl_lapl = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Laplacian']
@@ -882,7 +920,7 @@ def main():
     Pmi_matrix = pmi_matrix(row_col, LM_coll, term_term, max_value)
     dict_sorted = SVD_cosine_matrix(Pmi_matrix, tokens, row_col)
     final_queries = query_expansion(tokens, dict_sorted, tokenizer)
-    parameters = show_information_queries(final_queries, query_obj, tokenizer)
+    parameters, queries_low_distance = show_information_queries(final_queries, query_obj, tokenizer)
     get_low_queries_perplexity(final_queries, parameters)
 
 if __name__ == "__main__":
