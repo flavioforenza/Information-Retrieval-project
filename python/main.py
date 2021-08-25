@@ -29,7 +29,7 @@ while threshold<0.20:
 
     #2. Choice of Tokenizer
     tokenizer = Tokenizer()
-    tokenizer.set_name('gensim')
+    tokenizer.set_name('keras')
 
     #3. Compute Tf-Idf-Vectorize and Cosine similarity
     dm.ranking(query_obj, tokenizer)

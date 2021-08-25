@@ -118,9 +118,8 @@ def get_id_cleanTokens(columns):
 def ranking(query_info, tokenizer):
     with open('id_instructions.pkl', 'rb') as f:
         id_instr = pickle.load(f)
+    #tokenizer change the weigth of each relevant document
     vectorizer = TfidfVectorizer(tokenizer=tokenizer.get_model())
-    #pr = id_instr.values()
-    #dc = vectorizer.fit_transform('ciao come ti senti?')
     docs = vectorizer.fit_transform(id_instr.values())
     q = vectorizer.transform([query_info.query])
     #dict of relevant documents and scores
@@ -132,7 +131,7 @@ def ranking(query_info, tokenizer):
 
 def alterQuery():
     id_fQ = []
-    with tqdm(total=len(data['title']), file=sys.stdout) as pbar:
+    with tqdm(totarrl=len(data['title']), file=sys.stdout) as pbar:
         for title in data['title']:
             pbar.update(1)
             query = sp(title.lower())
@@ -168,7 +167,7 @@ def rnd_query():
     print("Looking for a query...")
     while not category:
         #rnd = random.randint(0, len(data))
-        #rnd = 13965
+        rnd = 13965
         #rnd = 21658
         #rnd = 7489
         #rnd = 21658
@@ -188,7 +187,7 @@ def rnd_query():
         #rnd = 1028
         #rnd = 48566
         #rnd = 34582 #Interpolation
-        rnd = 11
+        #rnd = 11
         #rnd = 37384 #->0
         #rnd = 16068
         #rnd = 13037
@@ -791,7 +790,7 @@ def show_information_queries(final_queries, query_info, tokenizer, list_relev_do
         pbar.write("Computation of the distance between the queries and the target document.")
         for qry in final_queries:
             q = new_Query(qry)
-            showPCA(q, list_relev_doc, tokenizer, query_info.index)
+            #showPCA(q, list_relev_doc, tokenizer, query_info.index)
             if q.distance <= query_info.distance:
                 queries_low_distance.append(q)
             pbar.update(1)
@@ -812,6 +811,21 @@ def show_information_queries(final_queries, query_info, tokenizer, list_relev_do
                       " Lambda2: ", l1_l2[1],
                       " Perplexity: ", min_perpl[1], "\n")
     return parameters, queries_low_distance
+
+def plot_time_series(informations):
+    for elem in informations[0][6]:
+        x = [(0.1,0.9), (0.2,0.8), (0.3,0.7), (0.4,0.6), (0.5,0.5), (0.6, 0.4), (0.7,0.3), (0.8,0.2), (0.9,0.1)]
+        y = [value for (id,value) in elem.values()]
+        plt.plot([str(i) for i in x], y)
+        idx=informations[0][6].index(elem)+2
+        lab = 's='+str(idx)
+        #plt.scatter(x,y, marker='o', alpha=0.5, cmap=plt.cm.get_cmap('Accent', 10), label=lab)
+        plt.legend()
+    plt.xlabel("(Lambda1, Lambda2)")
+    plt.xticks(rotation=90)
+    plt.ylabel("Perplexity")
+    plt.show()
+
 
 def get_low_queries_perplexity(final_queries, parameters):
     all_dict_perpl_lapl = [(k, v_r[0][-1]) for k, v_r in parameters.items() if v_r and v_r[0][0] == 'Laplacian']
@@ -853,6 +867,7 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Skip-grams: ", idx_s_p+2,
                           " - Lambda1: ", k_p_i[0],
                           " - Lambda2: ", k_p_i[1])
+                    plot_time_series(informations)
 
 def main():
     query_obj = rnd_query()
