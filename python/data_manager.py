@@ -813,17 +813,26 @@ def show_information_queries(final_queries, query_info, tokenizer, list_relev_do
     return parameters, queries_low_distance
 
 def plot_time_series(informations):
+    fig = plt.figure()
+    ax = plt.subplot(111)
+    values = [(0.1, 0.9), (0.2, 0.8), (0.3, 0.7), (0.4, 0.6), (0.5, 0.5), (0.6, 0.4), (0.7, 0.3), (0.8, 0.2),
+              (0.9, 0.1)]
     for elem in informations[0][6]:
-        x = [(0.1,0.9), (0.2,0.8), (0.3,0.7), (0.4,0.6), (0.5,0.5), (0.6, 0.4), (0.7,0.3), (0.8,0.2), (0.9,0.1)]
+        x = list(range(2, 11))
         y = [value for (id,value) in elem.values()]
-        plt.plot([str(i) for i in x], y)
         idx=informations[0][6].index(elem)+2
         lab = 's='+str(idx)
-        #plt.scatter(x,y, marker='o', alpha=0.5, cmap=plt.cm.get_cmap('Accent', 10), label=lab)
-        plt.legend()
+        ax.plot(x,y, marker='o', label=lab, linestyle="--")
     plt.xlabel("(Lambda1, Lambda2)")
     plt.xticks(rotation=90)
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
     plt.ylabel("Perplexity")
+    labels = [item.get_text() for item in ax.get_xticklabels()]
+    for i in range(1, len(values)+1):
+        labels[i] = values[i-1]
+    ax.set_xticklabels(labels)
     plt.show()
 
 
