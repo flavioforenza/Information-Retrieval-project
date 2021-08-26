@@ -813,7 +813,7 @@ def show_information_queries(final_queries, query_info, tokenizer, list_relev_do
     return parameters, queries_low_distance
 
 def plot_time_series(informations):
-    fig = plt.figure()
+    plt.figure(figsize=(25,15))
     ax = plt.subplot(111)
     values = [(0.1, 0.9), (0.2, 0.8), (0.3, 0.7), (0.4, 0.6), (0.5, 0.5), (0.6, 0.4), (0.7, 0.3), (0.8, 0.2),
               (0.9, 0.1)]
@@ -823,17 +823,21 @@ def plot_time_series(informations):
         idx=informations[0][6].index(elem)+2
         lab = 's='+str(idx)
         ax.plot(x,y, marker='o', label=lab, linestyle="--")
-    plt.xlabel("(Lambda1, Lambda2)")
-    plt.xticks(rotation=90)
+    plt.xlabel("(Lambda1, Lambda2)", fontsize = 20)
+    plt.ylabel("Perplexity", fontsize = 20)
+    plt.xticks(rotation=90, fontsize = 15)
+    plt.yticks(fontsize = 15)
     box = ax.get_position()
     ax.set_position([box.x0, box.y0, box.width * 0.8, box.height])
-    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
-    plt.ylabel("Perplexity")
+    legend = ax.legend(title='Skip-grams:', fancybox=True, fontsize=20, bbox_to_anchor=(1, 0.5), loc='center left')
+    plt.setp(legend.get_title(), fontsize=20)
     labels = [item.get_text() for item in ax.get_xticklabels()]
     for i in range(1, len(values)+1):
         labels[i] = values[i-1]
     ax.set_xticklabels(labels)
+    plt.savefig('/Users/flavioforenza/Desktop/perplexity.png')
     plt.show()
+    plt.clf()
 
 
 def get_low_queries_perplexity(final_queries, parameters):
