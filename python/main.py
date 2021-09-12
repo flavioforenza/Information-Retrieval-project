@@ -4,11 +4,12 @@ from tokenizers import Tokenizer
 import pandas as pd
 import pickle
 import os
+import sys
 
 data = pd.read_pickle("./CustomRecipesFilter.pkl")
 
-dm.plot_statistic('totInstructions')
-dm.plot_statistic('totIngredients')
+#dm.plot_statistic('totInstructions')
+#dm.plot_statistic('totIngredients')
 
 threshold = 0
 #1. Select a random query
@@ -29,7 +30,7 @@ while threshold<0.20:
 
     #2. Choice of Tokenizer
     tokenizer = Tokenizer()
-    tokenizer.set_name('keras')
+    tokenizer.set_name('nltk')
 
     #3. Compute Tf-Idf-Vectorize and Cosine similarity
     dm.ranking(query_obj, tokenizer)
@@ -105,7 +106,7 @@ final_queries = dm.query_expansion(tokens, dict_sorted, tokenizer)
 
 #12. SHOW INFORMATON ABOUT EACH QUERY:
 # QUERY - POSITION DOCUMENT TARGET - BEST SMOOTHING METHOD - SKIP-GRAM - PERPLEXITY
-parameters, queries_low_distance = dm.show_information_queries(final_queries, query_obj, tokenizer, all_relevant_documents, query_obj.id_doc)
+parameters = dm.show_information_queries(final_queries, query_obj, tokenizer, all_relevant_documents, query_obj.id_doc)
 
 #13. RETURN THE LIST OF QUERIES WITH THE LOWEST PERPLEXITY
 dm.get_low_queries_perplexity(final_queries, parameters)

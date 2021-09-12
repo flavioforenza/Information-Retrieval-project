@@ -67,7 +67,7 @@ def plot_statistic(column):
     bplt = sns.boxplot(data=data[column].values, linewidth=1, ax=ax[2])
     bplt.set_ylabel(column)
     plt.tight_layout()
-    #plt.savefig('imgs/statistic' + column)
+    plt.savefig('imgs/statistihe' + column)
     plt.show()
 
 #drop stop_words, punctuation and apply lemmatization
@@ -167,34 +167,7 @@ def rnd_query():
     print("Looking for a query...")
     while not category:
         #rnd = random.randint(0, len(data))
-        rnd = 13965
-        #rnd = 21658
-        #rnd = 7489
-        #rnd = 21658
-        #rnd = 34582
-        #rnd = 21933
-        #rnd = 2820 q->0 !!!!!
-        #rnd = 38241
-        #rnd = 6807
-        #rnd = 43755
-        #rnd = 32885
-        #rnd = 22319
-        #rnd = 26424
-        #rnd = 14989
-        #rnd = 11562
-        #rnd = 15361
-        #rnd = 9107 #different perplexity change index
-        #rnd = 1028
-        #rnd = 48566
-        #rnd = 34582 #Interpolation
-        #rnd = 11
-        #rnd = 37384 #->0
-        #rnd = 16068
-        #rnd = 13037
-        #rnd = 39800
-        #rnd = 12800 #9-->0 duplicati
-        #rnd = 10726
-        #rnd = 28640
+        rnd = 11
         cat = [data.iloc[rnd]['Scrape']]
         if len(cat[0])==0:
             continue
@@ -203,16 +176,12 @@ def rnd_query():
         query = clean_normalize(str(query))
         category.append(cat)
         query_obj = Query(rnd, np.unique(category).tolist(), id_doc, query)
-    # if not os.path.exists('imgs/query' + str(rnd) + 'thr10'):
-    #     os.makedirs('imgs/query' + str(rnd) + 'thr10')
-    #folder = ''
-    #folder = 'imgs/query' + str(rnd) + 'thr10'
     return query_obj
 
 '''
 SEARCH DOCUMENT ENTITIES WITH "scrape_schema_recipe" API
 '''
-def search_DocCategories(thr, doc_score): #SERVE?
+def search_DocCategories(thr, doc_score):
     data = pd.read_pickle("./OriginalRecipes.pkl")
     increment_bar = 0
     cat_not_empty = pd.DataFrame(columns=["Doc_id","Categories","Score"])
@@ -253,7 +222,6 @@ def getCatCorrispondece(qC, dC, estimate):
             corrispondence = [value for value in np.unique(qC).tolist() if value in np.unique(docC).tolist()]
         except:
             corrispondence.append([])
-        #se vi è almeno una corrispondenza
         if len(corrispondence) > 0:
             y_pred.append(1)
         else:
@@ -273,8 +241,8 @@ def plot(precision, recall, title, query_obj):
     ax2.set_xlabel('Interpolated Recall')
     ax2.set_ylabel('Precision')
     plt.figtext(.5,.90,'thr='+str(query_obj.threshold)+ '    ' + 'query: ' + query_obj.query,fontsize=10,ha='center')
-    #plt.savefig('/Users/flavioforenza/Desktop/PR/'+str(query_obj.index)+' '+title)
-    plt.show()
+    plt.savefig('/Users/flavioforenza/Desktop/PR/'+str(query_obj.index)+' '+title)
+    #plt.show()
     plt.clf()
 
 '''
@@ -287,7 +255,7 @@ def getPred(estimate, title, lstDoc, categories, query):
     precision, recall, thresholds = precision_recall_curve(y_pred, d_score)
     delta = np.diff(list(reversed(recall)))
     avgP = (delta*(list(reversed(precision))[:-1])).sum()
-    plot(precision, recall, title, query)
+    #plot(precision, recall, title, query)
     return avgP
 
 '''
@@ -341,10 +309,7 @@ def getEntitiesQuery_USDA(id_doc):
     lst_ingr_q_USDA = get_entities_USDA(ingredients[0])
     return lst_ingr_q_USDA
 
-#ricerca delle categorie dei documenti rilevanti con scrape vuoto
 #docCat_some_empty = getEntitiesDoc_USDA()
-
-#categorie ingredienti query
 #lst_ingr_q_USDA = getEntitiesQuery_USDA(query_obj.id_doc)
 
 def evaluate_mixed_entities(lst_ingr_q_USDA, docCat_some_empty, query_info):
@@ -361,7 +326,7 @@ SEARCH CATEGORY CORRESPONDENCE - 3rd METHOD
 --- USE ONLY ENTITIES FROM USDA DATABASE ---
 '''
 
-def only_USDA(query): #SERVE?
+def only_USDA(query):
     doc_USDAEntity = {}
     with tqdm(total=sum(i >= query.threshold for k,i in query.doc_score), file=sys.stdout) as pbar:
         pbar.write("Search entities in USDA Database...")
@@ -399,13 +364,10 @@ def showPCA(query, all_relevant_documents, tokenizer, idx_q):
     pca = PCA(n_components=2)
     v_docs = pca.fit_transform(documents.toarray())
     v_query = pca.transform(qr.toarray())
-
     XA = np.array(v_docs[-1]).reshape(1, -1)
     XB = np.array(v_query[0]).reshape(1, -1)
     distance = round(scipy.spatial.distance.cdist(XA, XB, 'euclidean')[0][0], 2)
     query.set_distance(distance)
-    #print("Query: ", query.query, " Distance: ", distance)
-
     LABEL_COLOR_MAP = {0: 'red',
                        1: 'orange',
                        2: 'blue'}
@@ -415,11 +377,10 @@ def showPCA(query, all_relevant_documents, tokenizer, idx_q):
                 cmap=plt.cm.get_cmap('Accent', 10), label='Doc. Target', s=100)
     plt.scatter(v_query[:, 0], v_query[:, 1], c=LABEL_COLOR_MAP[1], marker='*',
                 cmap=plt.cm.get_cmap('Paired', 10), label = 'Query', s=250)
-
     plt.title('Query: ' + query.query)
     plt.legend()
-    #plt.savefig('/Users/flavioforenza/Desktop/PCA_IR/'+ str(idx_q) +'/'+str(query.distance)+ ' ' + str(query.new) +'.png')
-    plt.show()
+    plt.savefig('/Users/flavioforenza/Desktop/PCA_IR/'+ str(idx_q) +'/'+str(query.distance)+ ' ' + query.query + ' ' + str(query.new) +'.png')
+    #plt.show()
     plt.clf()
 
 ''''
@@ -517,7 +478,6 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
                 bigramDoc.append(A*B) #p(wi-1,wi|Md)
         prodDocs = np.prod(bigramDoc) #P(q|Md) #bigram/unigram/zerogram
         prodColl = np.prod(bigramColl) #P(q|Mc) #unigram(wi-1)/zerogram
-        # P(w|d)=\lambdaP(q|Md)+(1-\lambda)P(q|Mc)
         resultInterp = lamb*prodDocs+(1-lamb2)*prodColl
         new_dict[doc_id] = resultInterp
     return new_dict
@@ -651,6 +611,7 @@ def term_term_matrix(query_info, tokenizer):
             newRanking = v[0][5]
     #Co-Occurrence method
     tokens = tokenizer.get_model()(query_info.query)
+    #new ranking based on the position of the target document returned by the smoothing calculation
     newRanking = list(newRanking)
     relevant_documents = []
     for i in range(0, index+1):
@@ -698,6 +659,8 @@ def pmi_matrix(row_col, LM_coll, term_term, max_value):
 def SVD_cosine_matrix(pmi_matrix, tokens, row_col):
     matrix_tmp = np.matrix(pmi_matrix, dtype=float)
     sparsity_with_PPMI = 1-(np.count_nonzero(matrix_tmp)/matrix_tmp.size)
+    print()
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@ SPARSITY @@@@@@@@@@@@@@@@@@@@@@@@@@@")
     print("Sparsity matrix with PPMI: ", sparsity_with_PPMI)
     U, S, Vt = np.linalg.svd(matrix_tmp)
     S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
@@ -741,6 +704,7 @@ def query_expansion(tokens, dict_sorted, tokenizer):
                         count+=1
             else:
                 break
+    #number of pairs of terms (token_quuery, co-occurence token)
     for k,v in all_query.items():
         print(len(v))
     final_queries = []
@@ -755,9 +719,8 @@ def query_expansion(tokens, dict_sorted, tokenizer):
         first_queries = all_query[tokens[idx]]
     tmp_list_queries = []
     for i in range (idx+1, len(all_query.keys())):
-        #copia delle prime query
         if not tmp_list_queries:
-            temp = first_queries.copy() #queries della prima parola
+            temp = first_queries.copy()
         else:
             temp = tmp_list_queries.copy()
         if len(dict_sorted_update[tokens[i]])>=10:
@@ -768,7 +731,6 @@ def query_expansion(tokens, dict_sorted, tokenizer):
             break
         tmp_list_queries = []
         for single_query in temp:
-            #tokenizzo la single_query
             tks_query = tokenizer.get_model()(single_query)
             #t = co-occurrence word, w: weight
             for (t,w) in tq_w:
@@ -783,21 +745,25 @@ def query_expansion(tokens, dict_sorted, tokenizer):
     return final_queries
 
 def show_information_queries(final_queries, query_info, tokenizer, list_relev_doc, id_target):
-    print("Query generate: ", len(final_queries))
+    print()
+    print("New queries: ", len(final_queries))
+    #contains the best ranking (derived from a specific query) based on the position of the target document
     parameters = optimals_parameters([bigram_query(q, tokenizer) for q in final_queries[:100]], query_info, tokenizer)
     queries_low_distance = []
+    print()
     with tqdm(total=len(final_queries), file=sys.stdout) as pbar:
         pbar.write("Computation of the distance between the queries and the target document.")
         for qry in final_queries:
             q = new_Query(qry)
-            #showPCA(q, list_relev_doc, tokenizer, query_info.index)
+            showPCA(q, list_relev_doc, tokenizer, query_info.index)
             if q.distance <= query_info.distance:
                 queries_low_distance.append(q)
             pbar.update(1)
     for k,v in parameters.items():
         if v:
             print("Query: ", final_queries[k], " ---------------------- Index:", v[0][1])
-            #showPCA(final_queries[k], list_relev_doc, tokenizer)
+            q = new_Query(final_queries[k])
+            #showPCA(q, final_queries[k], list_relev_doc, tokenizer)
             if v[0][0] == "Laplacian":
                 perplexity_query = v[0][4]
                 print("Laplacian - Skip-grams: ", v[0][2], " Perplexity: ", perplexity_query[v[0][2]-2][1], "\n") #get perplexity at specific skip-gram
@@ -810,7 +776,14 @@ def show_information_queries(final_queries, query_info, tokenizer, list_relev_do
                       " Lambda1: ", l1_l2[0],
                       " Lambda2: ", l1_l2[1],
                       " Perplexity: ", min_perpl[1], "\n")
-    return parameters, queries_low_distance
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@ QUERY DISTANCE @@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    min = sys.maxsize
+    for query in queries_low_distance:
+        if query.distance < min:
+            min = query.distance
+            print("Query: ", query.query, " - Distance: ", query.distance)
+    print()
+    return parameters
 
 def plot_time_series(informations):
     plt.figure(figsize=(25,15))
@@ -835,7 +808,7 @@ def plot_time_series(informations):
     for i in range(1, len(values)+1):
         labels[i] = values[i-1]
     ax.set_xticklabels(labels)
-    plt.savefig('/Users/flavioforenza/Desktop/perplexity.png')
+    #plt.savefig('/Users/flavioforenza/Desktop/perplexity.png')
     plt.show()
     plt.clf()
 
@@ -856,7 +829,7 @@ def get_low_queries_perplexity(final_queries, parameters):
                 if v_p_i[1] < min_perpl:
                     min_perpl = v_p_i[1]
 
-    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@ LOWEST PERPLEXITY @@@@@@@@@@@@@@@@@@@@@@@@@@@")
     print("Queries with lowest Perplexity: ", min_perpl)
     for (k_parameters, perpl) in all_dict_perpl_lapl:
         for (id_doc_p, score_p) in perpl:
@@ -880,7 +853,7 @@ def get_low_queries_perplexity(final_queries, parameters):
                           " - Skip-grams: ", idx_s_p+2,
                           " - Lambda1: ", k_p_i[0],
                           " - Lambda2: ", k_p_i[1])
-                    plot_time_series(informations)
+                    #plot_time_series(informations)
 
 def main():
     query_obj = rnd_query()
@@ -889,7 +862,14 @@ def main():
     print("Query idx: ", query_obj.index)
     print("Categories query: ", queryCat)
     print("Id Doc: ", query_obj.id_doc)
+    path = '/Users/flavioforenza/Desktop/PCA_IR/' + str(query_obj.index)
 
+    try:
+        os.mkdir(path)
+    except OSError:
+        print("Creation of the directory %s failed" % path)
+    else:
+        print("Successfully created the directory %s " % path)
     '''
     COMPUTE TFIDF-VECTORIZE AND COSINE SIMILARITY
     '''
