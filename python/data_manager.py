@@ -658,7 +658,6 @@ def pmi_matrix(row_col, LM_coll, term_term, max_value):
 def SVD_cosine_matrix(pmi_matrix, tokens, row_col):
     matrix_tmp = np.matrix(pmi_matrix, dtype=float)
     print()
-    print("@@@@@@@@@@@@@@@@@@@@@@@@@@@ SPARSITY @@@@@@@@@@@@@@@@@@@@@@@@@@@")
     U, S, Vt = np.linalg.svd(matrix_tmp)
     S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
     np.fill_diagonal(S2, S)
