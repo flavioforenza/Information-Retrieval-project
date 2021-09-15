@@ -451,7 +451,6 @@ def LinInterp_Smooth(LMdocs, qGrams, lamb, lamb2, LM_coll):
                 if sum(LM[a].values())>0:
                     bigramDoc.append((LM[a][b])/sum(LM[a].values()))
                     bigramColl.append(LM_coll[a][b]/sum(LM_coll[a].values()))
-                    #bigramColl.append(sum(LM[a].values())/len(LM))
                 else: #in this case unigram not exist --> scale down at (n−1)grams --> zero-gram 1/|V|
                     A = 1/l_singl
                     bigramColl.append(A)
@@ -658,17 +657,13 @@ def pmi_matrix(row_col, LM_coll, term_term, max_value):
 #SVD/LSI for matrix factorization
 def SVD_cosine_matrix(pmi_matrix, tokens, row_col):
     matrix_tmp = np.matrix(pmi_matrix, dtype=float)
-    sparsity_with_PPMI = 1-(np.count_nonzero(matrix_tmp)/matrix_tmp.size)
     print()
     print("@@@@@@@@@@@@@@@@@@@@@@@@@@@ SPARSITY @@@@@@@@@@@@@@@@@@@@@@@@@@@")
-    print("Sparsity matrix with PPMI: ", sparsity_with_PPMI)
     U, S, Vt = np.linalg.svd(matrix_tmp)
     S2 = np.zeros((len(matrix_tmp), len(matrix_tmp)), float)
     np.fill_diagonal(S2, S)
     U_S= np.dot(U,S2)
     S_Vt = np.dot(S2, Vt)
-    sparsity_with_SVD = 1-(np.count_nonzero(S_Vt)/S_Vt.size)
-    print("Sparsity matrix with SVD: ", sparsity_with_SVD)
     df_U_S = pd.DataFrame(np.array(U_S), columns= row_col, index=row_col)
     df_S_Vt = pd.DataFrame(np.array(S_Vt), columns= row_col, index=row_col)
     #get the query rows from df_S_Vt
